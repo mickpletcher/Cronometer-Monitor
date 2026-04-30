@@ -286,6 +286,20 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history and a record of al
 
 ---
 
+## Spec Workflow
+
+Future non trivial work in this repo should start from the GitHub Spec scaffold:
+
+1. Review [docs/repo-audit.md](docs/repo-audit.md)
+2. Create or update a numbered package under [specs](specs/)
+3. Work through `requirements.md`, `spec.md`, `plan.md`, and `tasks.md`
+4. Implement only what the active spec covers
+5. Run an audit and a regression pass before merge
+
+The first package is [specs/001-dom-extraction-hardening](specs/001-dom-extraction-hardening/). It captures the next logical improvement area for this project without changing the current Chrome plus DOM extraction design.
+
+---
+
 ## License
 
 MIT

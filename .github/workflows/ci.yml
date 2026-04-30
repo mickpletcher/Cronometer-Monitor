@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  powershell-validation:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.ps1 -File -Recurse
+          if (-not $files) {
+              throw 'No PowerShell scripts found.'
+          }
+
+          foreach ($file in $files) {
+              $tokens = $null
+              $errors = $null
+              [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+              if ($errors.Count -gt 0) {
+                  $messages = $errors | ForEach-Object { "$($_.Message) [$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber)]" }
+                  throw "Parse errors in $($file.FullName):`n$($messages -join \"`n\")"
+              }
+          }
+
+      - name: Run ScriptAnalyzer
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.ps1 -File -Recurse
+          $results = @()
+          foreach ($file in $files) {
+              $results += Invoke-ScriptAnalyzer -Path $file.FullName -Severity Error, Warning
+          }
+
+          if ($results.Count -gt 0) {
+              $results | Format-Table -AutoSize | Out-String | Write-Host
+              throw 'PSScriptAnalyzer reported findings.'
+          }
