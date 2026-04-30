@@ -8,7 +8,15 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 
 ## [Unreleased]
 
-No changes pending.
+### Added
+
+- `Start-ChromeDebug.ps1` — standalone script to kill Chrome, clear the session restore flag, relaunch with `--remote-debugging-port=9222`, and verify the debug endpoint responds. Replaces the manual PowerShell block previously provided as a one-off troubleshooting command.
+
+### Changed
+
+- Default `UserDataDir` changed from the real Chrome profile (`Google\Chrome\User Data`) to a dedicated persistent profile (`Google\Chrome\CronometerDebug`) in both `Start-ChromeDebug.ps1` and `Invoke-CronometerMonitor.ps1`. The real profile directory holds a lock that prevents Chrome from binding the debug port even when launched with the correct flags. The dedicated profile avoids the lock, persists the Cronometer login session between runs, and does not interfere with normal Chrome usage.
+- Added `--remote-debugging-address=0.0.0.0` and `--remote-allow-origins=*` to the Chrome launch arguments in both scripts. Newer Chrome versions require these flags for the debug port to accept WebSocket connections.
+- Changed all debug endpoint URLs from `http://localhost:PORT/json` to `http://127.0.0.1:PORT/json`. On Windows, `localhost` can resolve to the IPv6 address `::1` while Chrome binds only to the IPv4 address `127.0.0.1`, causing connection refused errors.
 
 ---
 

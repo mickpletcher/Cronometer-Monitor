@@ -44,10 +44,12 @@ Close Chrome completely, then run this once from PowerShell:
 
 ```powershell
 $chromePath  = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
-$userDataDir = "$env:LOCALAPPDATA\Google\Chrome\User Data"
+$userDataDir = "$env:LOCALAPPDATA\Google\Chrome\CronometerDebug"
 
 Start-Process -FilePath $chromePath -ArgumentList @(
     '--remote-debugging-port=9222',
+    '--remote-debugging-address=0.0.0.0',
+    '--remote-allow-origins=*',
     "--user-data-dir=`"$userDataDir`"",
     'https://cronometer.com'
 )
@@ -56,7 +58,7 @@ Start-Process -FilePath $chromePath -ArgumentList @(
 Verify it is working:
 
 ```powershell
-Invoke-RestMethod -Uri 'http://localhost:9222/json'
+Invoke-RestMethod -Uri 'http://127.0.0.1:9222/json'
 ```
 
 You should see a JSON array of open tabs. If a Cronometer tab is listed, the connection is ready.
@@ -117,7 +119,7 @@ $nutrition | ConvertTo-Json -Depth 5
 |---|---|---|---|
 | `DebuggingPort` | int | `9222` | Chrome remote debugging port |
 | `ChromePath` | string | `C:\Program Files\Google\Chrome\Application\chrome.exe` | Path to chrome.exe |
-| `UserDataDir` | string | `%LOCALAPPDATA%\Google\Chrome\User Data` | Chrome profile directory used when `-LaunchChrome` is specified |
+| `UserDataDir` | string | `%LOCALAPPDATA%\Google\Chrome\CronometerDebug` | Chrome profile directory used when `-LaunchChrome` is specified |
 | `LaunchChrome` | switch | off | Kill existing Chrome, clear session restore flag, and relaunch with remote debugging |
 | `LogPath` | string | `.\logs\CronometerMonitor.log` | CMTrace-compatible log file |
 | `RawResponsePath` | string | `.\logs\CronometerDiaryRawResponse.json` | Path for raw DOM response dump |
@@ -266,6 +268,7 @@ The nutrition summary panels must be visible and fully loaded in the browser for
 ```
 Cronometer-Monitor\
     Invoke-CronometerMonitor.ps1    Main script
+    Start-ChromeDebug.ps1           Chrome launcher with remote debugging
     CHANGELOG.md                    Version history and change log
     PLAN.md                         Architecture and build plan
     ANALYSIS.md                     Original project analysis

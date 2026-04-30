@@ -4,14 +4,11 @@ Connects to an authenticated Chrome session and extracts Cronometer diary nutrit
 
 .DESCRIPTION
 Attaches to an existing Chrome browser running with remote debugging enabled, locates the
-active Cronometer tab, reads the rendered nutrition summary panels from the DOM via the
-Chrome DevTools Protocol, and returns a structured result for downstream use.
+active Cronometer tab, intercepts or reads the diary API response via the Chrome DevTools
+Protocol, parses daily nutrition totals, and returns a structured result for downstream use.
 
 No Cronometer credentials are required. The tool uses the already authenticated Chrome
-profile. The script reads whatever diary date is currently displayed in Chrome. To extract
-a different date, navigate to it in Chrome before running this script.
-
-Run Start-ChromeDebug.ps1 first if Chrome is not already open with remote debugging.
+profile so the user never needs to log in through the script.
 
 ===========================================================================
 .PARAMETER DebuggingPort
@@ -23,12 +20,16 @@ Full path to chrome.exe. Defaults to the standard x64 install location.
 
 ===========================================================================
 .PARAMETER UserDataDir
-Chrome user data directory used when launching Chrome with -LaunchChrome.
+Chrome user data directory to use when launching Chrome. Defaults to the current user profile.
 
 ===========================================================================
 .PARAMETER LaunchChrome
-When specified, kills existing Chrome, clears the session restore flag, and relaunches
-with remote debugging before connecting. Equivalent to running Start-ChromeDebug.ps1 first.
+When specified, the script launches Chrome with remote debugging enabled before connecting.
+Omit this switch if Chrome is already running with --remote-debugging-port.
+
+===========================================================================
+.PARAMETER Date
+The diary date to extract. Defaults to today.
 
 ===========================================================================
 .PARAMETER LogPath
@@ -36,7 +37,7 @@ Path to the CMTrace-compatible log file.
 
 ===========================================================================
 .PARAMETER RawResponsePath
-Path where the raw DOM response JSON will be saved for inspection.
+Path where the raw diary API JSON response will be saved for schema inspection.
 
 ===========================================================================
 .PARAMETER ForceRawDump
@@ -48,7 +49,7 @@ Daily protein goal in grams.
 
 ===========================================================================
 .PARAMETER CalorieGoal
-Daily calorie goal in kcal.
+Daily calorie goal.
 
 ===========================================================================
 .PARAMETER CarbohydrateGoalGrams
@@ -60,15 +61,27 @@ Daily fat goal in grams.
 
 ===========================================================================
 .EXAMPLE
+# Chrome is already running with remote debugging. Pull today's diary.
 .\Invoke-CronometerMonitor.ps1
 
 ===========================================================================
 .EXAMPLE
+# Launch Chrome against your real profile, then extract.
 .\Invoke-CronometerMonitor.ps1 -LaunchChrome -ForceRawDump
 
 ===========================================================================
 .EXAMPLE
-.\Invoke-CronometerMonitor.ps1 -CalorieGoal 2500 -ProteinGoalGrams 175
+# Query a specific date.
+.\Invoke-CronometerMonitor.ps1 -Date '2026-04-28'
+
+===========================================================================
+.NOTES
+Chrome must be launched with:
+  --remote-debugging-port=9222
+  --user-data-dir="$env:LOCALAPPDATA\Google\Chrome\User Data"
+
+Run Connect-ChromeForDebugging once to start Chrome in this mode, then subsequent
+script runs can attach without -LaunchChrome as long as Chrome stays open.
 #>
 [CmdletBinding()]
 param(
@@ -79,10 +92,13 @@ param(
     [string]$ChromePath = 'C:\Program Files\Google\Chrome\Application\chrome.exe',
 
     [Parameter()]
-    [string]$UserDataDir = (Join-Path -Path $env:LOCALAPPDATA -ChildPath 'Google\Chrome\CronometerDebug'),
+    [string]$UserDataDir = (Join-Path -Path $env:LOCALAPPDATA -ChildPath 'Google\Chrome\User Data'),
 
     [Parameter()]
     [switch]$LaunchChrome,
+
+    [Parameter()]
+    [datetime]$Date = (Get-Date).Date,
 
     [Parameter()]
     [string]$LogPath = (Join-Path -Path $PSScriptRoot -ChildPath 'logs\CronometerMonitor.log'),
@@ -158,6 +174,11 @@ function Write-CMTraceLog {
 }
 
 function Clear-ChromeSessionRestore {
+    <#
+    .SYNOPSIS
+    Marks the Chrome profile as having exited cleanly so the restore prompt does not appear on next launch.
+    Must be called after Chrome is fully stopped and before it is relaunched.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -181,8 +202,8 @@ function Clear-ChromeSessionRestore {
             $prefs | Add-Member -MemberType NoteProperty -Name 'profile' -Value ([pscustomobject]@{})
         }
 
-        $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exit_type'      -Value 'Normal' -Force
-        $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exited_cleanly' -Value $true    -Force
+        $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exit_type'      -Value 'Normal'  -Force
+        $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exited_cleanly' -Value $true     -Force
 
         $prefs | ConvertTo-Json -Depth 100 -Compress | Set-Content -LiteralPath $prefsPath -Encoding UTF8
         Write-CMTraceLog -Message ("Cleared Chrome session restore flag in '{0}'." -f $prefsPath) -Path $LogPath
@@ -193,6 +214,12 @@ function Clear-ChromeSessionRestore {
 }
 
 function Connect-ChromeForDebugging {
+    <#
+    .SYNOPSIS
+    Kills any running Chrome processes, clears the session restore flag, then relaunches
+    Chrome with remote debugging enabled against the user's real profile.
+    Only call this if Chrome is not already running with --remote-debugging-port.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -214,8 +241,6 @@ function Connect-ChromeForDebugging {
 
     $chromeArgs = @(
         "--remote-debugging-port=$Port",
-        "--remote-debugging-address=0.0.0.0",
-        '--remote-allow-origins=*',
         "--user-data-dir=`"$UserDataDir`"",
         'https://cronometer.com'
     )
@@ -231,7 +256,7 @@ function Connect-ChromeForDebugging {
 
         Clear-ChromeSessionRestore -UserDataDir $UserDataDir -LogPath $LogPath
 
-        Write-CMTraceLog -Message ("Launching Chrome with remote debugging on port {0}." -f $Port) -Path $LogPath
+        Write-CMTraceLog -Message ("Launching Chrome with remote debugging on port {0}. User data: '{1}'." -f $Port, $UserDataDir) -Path $LogPath
         Start-Process -FilePath $ChromePath -ArgumentList $chromeArgs
         Start-Sleep -Seconds 3
         Write-CMTraceLog -Message 'Chrome launch complete.' -Path $LogPath
@@ -243,6 +268,10 @@ function Connect-ChromeForDebugging {
 }
 
 function Get-ChromeDebugEndpoint {
+    <#
+    .SYNOPSIS
+    Queries the Chrome /json endpoint and returns all open tab descriptors.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -252,7 +281,7 @@ function Get-ChromeDebugEndpoint {
         [string]$LogPath
     )
 
-    $uri = "http://127.0.0.1:$Port/json"
+    $uri = "http://localhost:$Port/json"
 
     try {
         Write-CMTraceLog -Message ("Querying Chrome debug endpoint at '{0}'." -f $uri) -Path $LogPath
@@ -261,12 +290,17 @@ function Get-ChromeDebugEndpoint {
         return $tabs
     }
     catch {
-        Write-CMTraceLog -Message ("Failed to reach Chrome debug endpoint. Is Chrome running with --remote-debugging-port={0}? Run Start-ChromeDebug.ps1 first. {1}" -f $Port, $_.Exception.Message) -Level Error -Path $LogPath
+        Write-CMTraceLog -Message ("Failed to reach Chrome debug endpoint at '{0}'. Is Chrome running with --remote-debugging-port={1}? {2}" -f $uri, $Port, $_.Exception.Message) -Level Error -Path $LogPath
         throw
     }
 }
 
 function Get-CronometerTab {
+    <#
+    .SYNOPSIS
+    Finds the first Chrome tab whose URL contains cronometer.com.
+    Returns the tab descriptor object.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -287,6 +321,11 @@ function Get-CronometerTab {
 }
 
 function Invoke-ChromeDevToolsCommand {
+    <#
+    .SYNOPSIS
+    Sends a single Chrome DevTools Protocol command over a WebSocket and returns the response.
+    Uses .NET ClientWebSocket directly for PS5.1 and PS7 compatibility.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -315,23 +354,26 @@ function Invoke-ChromeDevToolsCommand {
         $cts     = [System.Threading.CancellationTokenSource]::new([System.TimeSpan]::FromSeconds($TimeoutSeconds))
         $token   = $cts.Token
 
-        $ws.ConnectAsync($uri, $token).Wait($token)
+        $connectTask = $ws.ConnectAsync($uri, $token)
+        $connectTask.Wait($cts.Token)
 
         $id      = 1
         $payload = @{ id = $id; method = $Method; params = $Params } | ConvertTo-Json -Depth 10 -Compress
         $bytes   = [System.Text.Encoding]::UTF8.GetBytes($payload)
         $segment = [System.ArraySegment[byte]]::new($bytes)
 
-        $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $token).Wait($token)
+        $sendTask = $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $token)
+        $sendTask.Wait($token)
 
         $buffer      = New-Object byte[] 65536
         $recvSegment = [System.ArraySegment[byte]]::new($buffer)
-        $result      = $ws.ReceiveAsync($recvSegment, $token).Result
+        $recvTask    = $ws.ReceiveAsync($recvSegment, $token)
+        $result      = $recvTask.Result
 
         $json     = [System.Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
         $response = $json | ConvertFrom-Json
 
-        Write-CMTraceLog -Message ("CDP response received for '{0}'." -f $Method) -Path $LogPath
+        Write-CMTraceLog -Message ("CDP response received for method '{0}'." -f $Method) -Path $LogPath
         return $response
     }
     catch {
@@ -347,6 +389,13 @@ function Invoke-ChromeDevToolsCommand {
 }
 
 function Get-NutritionDataViaDOM {
+    <#
+    .SYNOPSIS
+    Reads the rendered nutrition totals from the Cronometer diary page using CDP Runtime.evaluate.
+    Scrapes all six targets-table panels (General, B-Vitamins, Vitamins, Minerals, etc.),
+    deduplicates by nutrient name, and returns a JSON object with the diary date and all
+    nutrient values.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -370,7 +419,7 @@ function Get-NutritionDataViaDOM {
             var valEl  = row.querySelector('.targets-table-number .gwt-HTML');
             var unitEl = row.querySelector('td:nth-child(3) .gwt-Label');
             if (nameEl && valEl) {
-                var name  = nameEl.innerText.replace(/[ \s]+/g, ' ').trim();
+                var name  = nameEl.innerText.replace(/[ \s]+/g, ' ').trim();
                 var value = valEl.innerText.trim();
                 var unit  = unitEl ? unitEl.innerText.trim() : '';
                 if (name && value !== '-' && !nutrients[name]) {
@@ -398,7 +447,7 @@ function Get-NutritionDataViaDOM {
             -Params $cdpParams `
             -LogPath $LogPath
 
-        if ($response.result.PSObject.Properties['exceptionDetails']) {
+        if ($response.result.exceptionDetails) {
             throw ("Page-side script threw an exception: {0}" -f $response.result.exceptionDetails.exception.description)
         }
 
@@ -415,7 +464,13 @@ function Get-NutritionDataViaDOM {
     }
 }
 
+
 function ConvertFrom-NutritionResponse {
+    <#
+    .SYNOPSIS
+    Parses the DOM-extracted JSON into a structured result object and evaluates goals.
+    Input JSON shape: { date: "Apr 28", nutrients: { "Energy": { value: "1625.3", unit: "kcal" }, ... } }
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -448,9 +503,8 @@ function ConvertFrom-NutritionResponse {
         $parsed    = $RawJson | ConvertFrom-Json
         $diaryDate = $parsed.date
         $n         = $parsed.nutrients
-        $nutrientPropertyCount = @($n.PSObject.Properties).Count
 
-        if (-not $n -or $nutrientPropertyCount -eq 0) {
+        if (-not $n -or $n.PSObject.Properties.Count -eq 0) {
             Write-CMTraceLog -Message 'No nutrients found in DOM response. Ensure the Cronometer diary page is open and the nutrition summary panel is visible.' -Level Warning -Path $LogPath
         }
 
@@ -508,18 +562,15 @@ function ConvertFrom-NutritionResponse {
             $alerts.Add(("Fat below goal: {0:F1}g consumed / {1}g goal ({2:F1}g remaining)" -f $fat, $FatGoalGrams, $fatRemaining))
         }
 
-        $allNutrients = @()
-        if ($n) {
-            $allNutrients = @(
-                $n.PSObject.Properties | ForEach-Object {
-                    [pscustomobject]@{
-                        Name  = $_.Name
-                        Value = $_.Value.value
-                        Unit  = $_.Value.unit
-                    }
+        $allNutrients = @(
+            $n.PSObject.Properties | ForEach-Object {
+                [pscustomobject]@{
+                    Name  = $_.Name
+                    Value = $_.Value.value
+                    Unit  = $_.Value.unit
                 }
-            )
-        }
+            }
+        )
 
         return [pscustomobject]@{
             DiaryDate               = $diaryDate
@@ -565,8 +616,9 @@ function ConvertFrom-NutritionResponse {
             B6_Pyridoxine_mg        = $vitB6
             B12_Cobalamin_ug        = $vitB12
             Folate_ug               = $folate
-            QueryStatus             = if ($n -and $nutrientPropertyCount -gt 0) { 'Parsed' } else { 'NoDataFound' }
+            Nutrients               = $allNutrients
             Alerts                  = @($alerts)
+            QueryStatus             = if ($n.PSObject.Properties.Count -gt 0) { 'Parsed' } else { 'NoDataFound' }
             ExtractionMethod        = 'DOM'
         }
     }
@@ -627,6 +679,9 @@ function Start-CronometerMonitor {
         [bool]$ShouldLaunchChrome,
 
         [Parameter(Mandatory)]
+        [datetime]$Date,
+
+        [Parameter(Mandatory)]
         [string]$LogPath,
 
         [Parameter(Mandatory)]
@@ -684,17 +739,18 @@ function Start-CronometerMonitor {
 
 try {
     $result = Start-CronometerMonitor `
-        -Port                  $DebuggingPort `
-        -ChromePath            $ChromePath `
-        -UserDataDir           $UserDataDir `
-        -ShouldLaunchChrome    $LaunchChrome.IsPresent `
-        -LogPath               $LogPath `
-        -RawResponsePath       $RawResponsePath `
-        -ForceRawDump          $ForceRawDump.IsPresent `
-        -CalorieGoal           $CalorieGoal `
-        -ProteinGoalGrams      $ProteinGoalGrams `
+        -Port              $DebuggingPort `
+        -ChromePath        $ChromePath `
+        -UserDataDir       $UserDataDir `
+        -ShouldLaunchChrome $LaunchChrome.IsPresent `
+        -Date              $Date `
+        -LogPath           $LogPath `
+        -RawResponsePath   $RawResponsePath `
+        -ForceRawDump      $ForceRawDump.IsPresent `
+        -CalorieGoal       $CalorieGoal `
+        -ProteinGoalGrams  $ProteinGoalGrams `
         -CarbohydrateGoalGrams $CarbohydrateGoalGrams `
-        -FatGoalGrams          $FatGoalGrams
+        -FatGoalGrams      $FatGoalGrams
 
     $result
 }
