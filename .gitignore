@@ -6,3 +6,6 @@ logs/
 
 # Saved credentials
 *.credential.xml
+
+# Local planning documents
+future-upgrades.md
