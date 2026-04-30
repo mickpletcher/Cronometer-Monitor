@@ -14,7 +14,7 @@ This project is a PowerShell script that authenticates to Cronometer, queries th
 ## Current Status
 
 | Component | Status |
-|---|---|
+| --- | --- |
 | CMTrace logging | Working |
 | Credential handling (parameter, file, interactive) | Working |
 | Session creation and cookie capture | Working |
@@ -49,7 +49,8 @@ Cronometer may use a different base path (e.g., `/graphql`, `/api/graphql`, or a
 In `Get-CronometerErrorDetail`, the code attempts to call `$response.Content.ReadAsStringAsync()` after `Invoke-RestMethod` has already disposed the `HttpConnectionResponseContent`. This is a PowerShell 7 behavior where the response content stream is consumed by the cmdlet before the catch block runs.
 
 The log shows:
-```
+
+```text
 Could not extract HTTP response details. Exception calling "ReadAsStringAsync" with "0" argument(s): "Cannot access a disposed object."
 ```
 
@@ -73,6 +74,7 @@ The `GetResponseStream` path handles PS5.1 correctly, so keep that. Remove the `
 The script structure is solid.
 
 **Strengths:**
+
 - Clean separation of concerns. Each function has a single responsibility.
 - CMTrace logging is correctly formatted and includes timestamp, thread, context, and severity.
 - Credential handling covers all three cases (parameter, encrypted file, interactive prompt) with a save option on first interactive use.
@@ -82,6 +84,7 @@ The script structure is solid.
 - `Set-StrictMode -Version Latest` and `$ErrorActionPreference = 'Stop'` enforce clean error propagation.
 
 **Weaknesses:**
+
 - The GraphQL query at line 418 is a placeholder. The field names (`diary`, `totals`, `nutrients`) are assumed. They will likely need to match Cronometer's actual schema exactly.
 - No timeout is set on `Invoke-RestMethod` calls. A hung connection will block indefinitely.
 - The script logs the credential file path but not whether credentials were valid (login success vs. cookie presence). Two cookies does not confirm a valid authenticated session. The login response body is discarded.
@@ -92,7 +95,7 @@ The script structure is solid.
 ## Parameters and Defaults
 
 | Parameter | Default | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `Date` | Today's date | Accepts any `[datetime]` |
 | `Credential` | None | PSCredential object |
 | `CredentialPath` | `%APPDATA%\CronometerMonitor\cronometer.credential.xml` | Auto-created on save |
@@ -111,7 +114,7 @@ The script structure is solid.
 
 When the diary request succeeds and parses correctly, `Start-CronometerMonitor` returns a `PSCustomObject` with:
 
-```
+```text
 Date                 string    yyyy-MM-dd
 Calories             double
 ProteinGrams         double

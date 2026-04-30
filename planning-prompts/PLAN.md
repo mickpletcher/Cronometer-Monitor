@@ -43,7 +43,7 @@ The new approach eliminates credential handling completely. Chrome already has a
 
 ## Section 2: Architecture
 
-```
+```text
 Chrome (authenticated session, port 9222)
         |
         | HTTP GET http://localhost:9222/json
@@ -119,6 +119,7 @@ Expect a JSON array of open tabs. If you see a Cronometer tab, Phase 1 is done.
 **Task 2.3** Click to any diary date in Cronometer. Watch for a POST request.
 
 **Task 2.4** Click the POST request and inspect:
+
 - Full URL (copy it)
 - Request payload (the JSON body including `operationName`, `variables`, `query`)
 - Response body (the full JSON)
@@ -126,6 +127,7 @@ Expect a JSON array of open tabs. If you see a Cronometer tab, Phase 1 is done.
 **Task 2.5** Copy the complete `query` string. Note the field names under the response (calories, protein, carbohydrates, fat, and any nutrient array structure).
 
 **Task 2.6** Update these two locations in `Invoke-CronometerMonitor.ps1`:
+
 - `$graphqlEndpoint` in `Get-NutritionDataViaNetwork` (replace with real URL)
 - `$graphqlQuery` in `Get-NutritionDataViaNetwork` (replace with real operation and fields)
 - Property paths in `ConvertFrom-NutritionResponse` under `# PLACEHOLDER`
@@ -157,7 +159,7 @@ See `Invoke-CronometerMonitor.ps1`.
 ### Key functions
 
 | Function | Responsibility |
-|---|---|
+| --- | --- |
 | `Connect-ChromeForDebugging` | Launches Chrome with `--remote-debugging-port` if needed |
 | `Get-ChromeDebugEndpoint` | GETs `http://localhost:9222/json`, returns tab list |
 | `Get-CronometerTab` | Finds the Cronometer tab by URL pattern |
@@ -170,7 +172,7 @@ See `Invoke-CronometerMonitor.ps1`.
 
 ### Output object
 
-```
+```text
 Date                    string    yyyy-MM-dd
 CaloriesConsumed        double
 CaloriesRemaining       double
@@ -196,7 +198,7 @@ ExtractionMethod        string     'Network' | 'DOM'
 ### Placeholders still active
 
 | Location | What to replace |
-|---|---|
+| --- | --- |
 | `Get-NutritionDataViaNetwork` `$graphqlEndpoint` | Real GraphQL URL |
 | `Get-NutritionDataViaNetwork` `$graphqlQuery` | Real operation name, variables, query string |
 | `Get-NutritionDataViaDOM` selectors | Real CSS selectors from the Cronometer UI |

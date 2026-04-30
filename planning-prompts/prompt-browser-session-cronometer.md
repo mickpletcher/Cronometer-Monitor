@@ -1,4 +1,4 @@
-## Updated Project Direction
+# Updated Project Direction
 
 The script should not start by logging in with Cronometer credentials.
 
