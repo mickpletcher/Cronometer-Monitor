@@ -795,8 +795,16 @@ function ConvertFrom-NutritionResponse {
             NutrientUnitSelector  = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientUnit } else { '' }
         }
 
-        $missingSignals = if ($metadata) { @($metadata.missingSignals) } else { @() }
-        $missingSignalsSummary = if ($missingSignals.Count -gt 0) { $missingSignals -join ', ' } else { 'None' }
+        $missingSignals = if ($metadata -and $metadata.PSObject.Properties['missingSignals']) { @($metadata.missingSignals) } else { @() }
+        $missingSignals = @($missingSignals | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        $missingSignalsSummary = if (@($missingSignals).Count -gt 0) { $missingSignals -join ', ' } else { 'None' }
+        $selectorMatchesSummary = @(
+            "Date=$($selectorMatches.DateSelector)"
+            "Tables=$($selectorMatches.TablesSelector)"
+            "Name=$($selectorMatches.NutrientNameSelector)"
+            "Value=$($selectorMatches.NutrientValueSelector)"
+            "Unit=$($selectorMatches.NutrientUnitSelector)"
+        ) -join '; '
 
         return [pscustomobject]@{
             SchemaVersion          = '2.0'
@@ -859,9 +867,11 @@ function ConvertFrom-NutritionResponse {
             MissingSignalsSummary   = $missingSignalsSummary
             OutputMetadata          = [pscustomobject]@{
                 SchemaVersion        = '2.0'
+                SelectorMatchesSummary = $selectorMatchesSummary
                 SelectorMatches      = $selectorMatches
                 TableCount           = if ($metadata) { [int]$metadata.tableCount } else { 0 }
                 NutrientCount        = if ($metadata) { [int]$metadata.nutrientCount } else { 0 }
+                MissingSignalsSummary = $missingSignalsSummary
                 MissingSignals       = $missingSignals
             }
         }
@@ -981,25 +991,27 @@ function Start-CronometerMonitor {
 
 #region Main
 
-try {
-    $result = Start-CronometerMonitor `
-        -Port                  $DebuggingPort `
-        -ChromePath            $ChromePath `
-        -UserDataDir           $UserDataDir `
-        -ShouldLaunchChrome    $LaunchChrome.IsPresent `
-        -LogPath               $LogPath `
-        -RawResponsePath       $RawResponsePath `
-        -ForceRawDump          $ForceRawDump.IsPresent `
-        -CalorieGoal           $CalorieGoal `
-        -ProteinGoalGrams      $ProteinGoalGrams `
-        -CarbohydrateGoalGrams $CarbohydrateGoalGrams `
-        -FatGoalGrams          $FatGoalGrams
+if ($MyInvocation.InvocationName -ne '.') {
+    try {
+        $result = Start-CronometerMonitor `
+            -Port                  $DebuggingPort `
+            -ChromePath            $ChromePath `
+            -UserDataDir           $UserDataDir `
+            -ShouldLaunchChrome    $LaunchChrome.IsPresent `
+            -LogPath               $LogPath `
+            -RawResponsePath       $RawResponsePath `
+            -ForceRawDump          $ForceRawDump.IsPresent `
+            -CalorieGoal           $CalorieGoal `
+            -ProteinGoalGrams      $ProteinGoalGrams `
+            -CarbohydrateGoalGrams $CarbohydrateGoalGrams `
+            -FatGoalGrams          $FatGoalGrams
 
-    $result
-}
-catch {
-    Write-Error -Message $_.Exception.Message
-    exit 1
+        $result
+    }
+    catch {
+        Write-Error -Message $_.Exception.Message
+        exit 1
+    }
 }
 
 #endregion Main

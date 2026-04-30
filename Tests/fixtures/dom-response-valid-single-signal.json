@@ -1,0 +1,23 @@
+{
+  "date": "Today",
+  "nutrients": {
+    "Energy": { "value": "685.1", "unit": "kcal" },
+    "Protein": { "value": "84.5", "unit": "g" },
+    "Carbs": { "value": "37.8", "unit": "g" },
+    "Fat": { "value": "21.7", "unit": "g" }
+  },
+  "metadata": {
+    "selectorMatches": {
+      "date": ".diary-date-btn",
+      "tables": "table.targets-table",
+      "nutrientName": ".nutrient-name",
+      "nutrientValue": ".targets-table-number .gwt-HTML",
+      "nutrientUnit": "td:nth-child(3) .gwt-Label"
+    },
+    "tableCount": 6,
+    "nutrientCount": 4,
+    "missingSignals": [
+      "NutrientUnitSelector"
+    ]
+  }
+}

@@ -226,7 +226,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 | `NutrientValueSelectorUsed` | string | Selector that matched nutrient values |
 | `NutrientUnitSelectorUsed` | string | Selector that matched nutrient units |
 | `MissingSignalsSummary` | string | Friendly summary of extraction warnings. `None` when no extraction signals were missing |
-| `OutputMetadata` | object | Selector matches, nutrient count, table count, and missing extraction signals |
+| `OutputMetadata` | object | Selector matches, selector summary text, nutrient count, table count, and missing extraction signals |
 
 ### Example output
 
@@ -276,7 +276,7 @@ NutrientNameSelectorUsed : .nutrient-name
 NutrientValueSelectorUsed : .targets-table-number .gwt-HTML
 NutrientUnitSelectorUsed : td:nth-child(3) .gwt-Label
 MissingSignalsSummary   : None
-OutputMetadata          : @{SchemaVersion=2.0; SelectorMatches=...; TableCount=2; NutrientCount=38; MissingSignals=System.Object[]}
+OutputMetadata          : @{SchemaVersion=2.0; SelectorMatchesSummary=Date=.diary-date-btn; Tables=table.targets-table; Name=.nutrient-name; Value=.targets-table-number .gwt-HTML; Unit=td:nth-child(3) .gwt-Label; SelectorMatches=...; TableCount=2; NutrientCount=38; MissingSignalsSummary=None; MissingSignals=System.Object[]}
 ```
 
 ---
@@ -290,6 +290,24 @@ The script now writes stage and category markers into the message body so you ca
 The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients, metadata }` object extracted from the page and is useful for verifying what the script read from the browser.
 
 For normal console use, the script also promotes the matched selector values and summary fields to top-level properties so you do not need to expand `OutputMetadata` just to see what happened.
+
+---
+
+## Tests
+
+Fixture-based regression coverage now exists for the output shaping path.
+
+Run the current tests with:
+
+```powershell
+Invoke-Pester -Path .\Tests\Invoke-CronometerMonitor.Output.Tests.ps1 -CI
+```
+
+The current fixture coverage verifies:
+
+- Empty `missingSignals` data renders as `MissingSignalsSummary = None`
+- Single-item `missingSignals` data does not fail on scalar versus array shape differences
+- Selector display fields are promoted correctly into the top-level output object
 
 ---
 
@@ -312,6 +330,7 @@ Cronometer-Monitor\
     ANALYSIS.md                     Original project analysis
     docs\                           Repo audit and support docs
     specs\                          GitHub Spec packages for non-trivial changes
+    Tests\                          Fixture-based regression tests
     README.md                       This file
     logs\
         CronometerMonitor.log               CMTrace-formatted activity log
