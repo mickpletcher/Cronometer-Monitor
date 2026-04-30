@@ -217,8 +217,15 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 | `ValidationStatus` | string | Validation result for the required field check |
 | `RequiredFieldsPresent` | bool | `True` when the required macro fields were extracted and parsed correctly |
 | `MissingRequiredFields` | string[] | Missing or invalid required fields |
+| `MissingRequiredSummary` | string | Friendly summary of missing required fields. `None` when all required fields were present |
 | `ExtractionMethod` | string | Always `DOM` |
 | `ExtractionAttemptsUsed` | int | Number of extraction attempts used before returning output |
+| `DateSelectorUsed` | string | Selector that matched the diary date element |
+| `TablesSelectorUsed` | string | Selector that matched the nutrient tables |
+| `NutrientNameSelectorUsed` | string | Selector that matched nutrient labels |
+| `NutrientValueSelectorUsed` | string | Selector that matched nutrient values |
+| `NutrientUnitSelectorUsed` | string | Selector that matched nutrient units |
+| `MissingSignalsSummary` | string | Friendly summary of extraction warnings. `None` when no extraction signals were missing |
 | `OutputMetadata` | object | Selector matches, nutrient count, table count, and missing extraction signals |
 
 ### Example output
@@ -260,8 +267,15 @@ QueryStatus             : Parsed
 ValidationStatus        : Passed
 RequiredFieldsPresent   : True
 MissingRequiredFields   : {}
+MissingRequiredSummary  : None
 ExtractionMethod        : DOM
 ExtractionAttemptsUsed  : 1
+DateSelectorUsed        : .diary-date-btn
+TablesSelectorUsed      : table.targets-table
+NutrientNameSelectorUsed : .nutrient-name
+NutrientValueSelectorUsed : .targets-table-number .gwt-HTML
+NutrientUnitSelectorUsed : td:nth-child(3) .gwt-Label
+MissingSignalsSummary   : None
 OutputMetadata          : @{SchemaVersion=2.0; SelectorMatches=...; TableCount=2; NutrientCount=38; MissingSignals=System.Object[]}
 ```
 
@@ -274,6 +288,8 @@ All activity is written to a CMTrace-compatible log file at `.\logs\CronometerMo
 The script now writes stage and category markers into the message body so you can tell whether a message came from browser discovery, DOM extraction, validation, parsing, retry wait, or run completion.
 
 The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients, metadata }` object extracted from the page and is useful for verifying what the script read from the browser.
+
+For normal console use, the script also promotes the matched selector values and summary fields to top-level properties so you do not need to expand `OutputMetadata` just to see what happened.
 
 ---
 

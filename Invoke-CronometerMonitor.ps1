@@ -787,6 +787,17 @@ function ConvertFrom-NutritionResponse {
             )
         }
 
+        $selectorMatches = [pscustomobject]@{
+            DateSelector          = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.date } else { '' }
+            TablesSelector        = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.tables } else { '' }
+            NutrientNameSelector  = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientName } else { '' }
+            NutrientValueSelector = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientValue } else { '' }
+            NutrientUnitSelector  = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientUnit } else { '' }
+        }
+
+        $missingSignals = if ($metadata) { @($metadata.missingSignals) } else { @() }
+        $missingSignalsSummary = if ($missingSignals.Count -gt 0) { $missingSignals -join ', ' } else { 'None' }
+
         return [pscustomobject]@{
             SchemaVersion          = '2.0'
             DiaryDate               = $diaryDate
@@ -836,15 +847,22 @@ function ConvertFrom-NutritionResponse {
             ValidationStatus        = if ($ValidationResult) { $ValidationResult.ValidationStatus } else { 'NotRun' }
             RequiredFieldsPresent   = if ($ValidationResult) { $ValidationResult.IsValid } else { $false }
             MissingRequiredFields   = if ($ValidationResult) { @($ValidationResult.MissingRequiredFields) } else { @() }
+            MissingRequiredSummary  = if ($ValidationResult -and @($ValidationResult.MissingRequiredFields).Count -gt 0) { @($ValidationResult.MissingRequiredFields) -join ', ' } else { 'None' }
             Alerts                  = @($alerts)
             ExtractionMethod        = 'DOM'
             ExtractionAttemptsUsed  = $AttemptsUsed
+            DateSelectorUsed        = $selectorMatches.DateSelector
+            TablesSelectorUsed      = $selectorMatches.TablesSelector
+            NutrientNameSelectorUsed = $selectorMatches.NutrientNameSelector
+            NutrientValueSelectorUsed = $selectorMatches.NutrientValueSelector
+            NutrientUnitSelectorUsed = $selectorMatches.NutrientUnitSelector
+            MissingSignalsSummary   = $missingSignalsSummary
             OutputMetadata          = [pscustomobject]@{
                 SchemaVersion        = '2.0'
-                SelectorMatches      = if ($metadata) { $metadata.selectorMatches } else { $null }
+                SelectorMatches      = $selectorMatches
                 TableCount           = if ($metadata) { [int]$metadata.tableCount } else { 0 }
                 NutrientCount        = if ($metadata) { [int]$metadata.nutrientCount } else { 0 }
-                MissingSignals       = if ($metadata) { @($metadata.missingSignals) } else { @() }
+                MissingSignals       = $missingSignals
             }
         }
     }

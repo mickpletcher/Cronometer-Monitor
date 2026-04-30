@@ -16,6 +16,7 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 - `Test-NutritionExtractionPayload` — explicit required field validation for the DOM payload before the final output object is returned.
 - `Invoke-RetryableNutritionExtraction` — bounded retry wrapper around DOM extraction and validation for page readiness timing issues.
 - Output schema metadata fields: `SchemaVersion`, `ValidationStatus`, `RequiredFieldsPresent`, `MissingRequiredFields`, `ExtractionAttemptsUsed`, and `OutputMetadata`.
+- Console-friendly display fields: `MissingRequiredSummary`, `DateSelectorUsed`, `TablesSelectorUsed`, `NutrientNameSelectorUsed`, `NutrientValueSelectorUsed`, `NutrientUnitSelectorUsed`, and `MissingSignalsSummary`.
 
 ### Changed
 
@@ -25,6 +26,7 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 - `Get-NutritionDataViaDOM` now returns selector diagnostics and missing signal metadata along with the extracted nutrient payload.
 - `Start-CronometerMonitor` now retries extraction up to three times with a short wait when the page is open but required DOM fields are not ready yet.
 - `ConvertFrom-NutritionResponse` now standardizes the output schema at version `2.0` and surfaces validation state instead of treating all partial extraction results as generic `NoDataFound`.
+- `ConvertFrom-NutritionResponse` now promotes matched selector details and summary fields to top-level properties so they render clearly in default PowerShell console output.
 - `README.md` updated to document the hardened DOM workflow, validation behavior, retry behavior, and the expanded output schema.
 - `future-upgrades.md` updated to mark Tier 1 extraction hardening complete and shift the near term focus to tests and the next service layer work.
 
