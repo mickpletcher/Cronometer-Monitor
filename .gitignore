@@ -1,0 +1,8 @@
+# VS Code workspace file
+*.code-workspace
+
+# Logs
+logs/
+
+# Saved credentials
+*.credential.xml
