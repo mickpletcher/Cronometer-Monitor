@@ -1,15 +1,15 @@
 ﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
-<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="2" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-04-30" time="12:47:50">
-  <environment cwd="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor" machine-name="DESKTOP-8A1RSPV" platform="Microsoft Windows 11 Pro|C:\Windows|\Device\Harddisk0\Partition3" nunit-version="2.5.8.0" os-version="10.0.26200" user-domain="DESKTOP-8A1RSPV" user="mick0" clr-version="10.0.6" />
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="2" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-04-30" time="13:01:02">
+  <environment machine-name="DESKTOP-8A1RSPV" user-domain="DESKTOP-8A1RSPV" user="mick0" platform="Microsoft Windows 11 Pro|C:\Windows|\Device\Harddisk0\Partition3" cwd="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor" os-version="10.0.26200" clr-version="10.0.6" nunit-version="2.5.8.0" />
   <culture-info current-culture="en-US" current-uiculture="en-US" />
-  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="1.461" asserts="0" description="Pester">
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="2.2908" asserts="0" description="Pester">
     <results>
-      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\Invoke-CronometerMonitor.Output.Tests.ps1" executed="True" result="Success" success="True" time="1.461" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\Invoke-CronometerMonitor.Output.Tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\Invoke-CronometerMonitor.Output.Tests.ps1" executed="True" result="Success" success="True" time="2.2908" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\Invoke-CronometerMonitor.Output.Tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="ConvertFrom-NutritionResponse output shaping" executed="True" result="Success" success="True" time="0.5995" asserts="0" description="ConvertFrom-NutritionResponse output shaping">
+          <test-suite type="TestFixture" name="ConvertFrom-NutritionResponse output shaping" executed="True" result="Success" success="True" time="0.9176" asserts="0" description="ConvertFrom-NutritionResponse output shaping">
             <results>
-              <test-case description="renders empty missing signals as None and preserves selector fields" name="ConvertFrom-NutritionResponse output shaping.renders empty missing signals as None and preserves selector fields" time="0.3676" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="handles a single missing signal entry without scalar Count failures" name="ConvertFrom-NutritionResponse output shaping.handles a single missing signal entry without scalar Count failures" time="0.0823" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="renders empty missing signals as None and preserves selector fields" name="ConvertFrom-NutritionResponse output shaping.renders empty missing signals as None and preserves selector fields" time="0.5539" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="handles a single missing signal entry without scalar Count failures" name="ConvertFrom-NutritionResponse output shaping.handles a single missing signal entry without scalar Count failures" time="0.1031" asserts="0" success="True" result="Success" executed="True" />
             </results>
           </test-suite>
         </results>

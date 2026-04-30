@@ -2,7 +2,7 @@ Describe 'ConvertFrom-NutritionResponse output shaping' {
     BeforeAll {
         $repoRoot = Split-Path -Path $PSScriptRoot -Parent
         . (Join-Path -Path $repoRoot -ChildPath 'Invoke-CronometerMonitor.ps1')
-        $logPath = Join-Path -Path $TestDrive -ChildPath 'CronometerMonitor.test.log'
+        $script:logPath = Join-Path -Path $TestDrive -ChildPath 'CronometerMonitor.test.log'
     }
 
     It 'renders empty missing signals as None and preserves selector fields' {

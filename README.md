@@ -87,6 +87,13 @@ You should see a JSON array of open tabs. If a Cronometer tab is listed, the con
 .\Invoke-CronometerMonitor.ps1 -ForceRawDump
 ```
 
+### Write the final structured result to JSON for n8n
+
+```powershell
+.\Invoke-CronometerMonitor.ps1
+Get-Content .\logs\CronometerMonitorResult.json
+```
+
 ### Launch Chrome and extract in one command
 
 ```powershell
@@ -131,6 +138,7 @@ $nutrition | ConvertTo-Json -Depth 5
 | `LaunchChrome` | switch | off | Kill existing Chrome, clear session restore flag, and relaunch with remote debugging |
 | `LogPath` | string | `.\logs\CronometerMonitor.log` | CMTrace-compatible log file |
 | `RawResponsePath` | string | `.\logs\CronometerDiaryRawResponse.json` | Path for raw DOM response dump |
+| `ResultJsonPath` | string | `.\logs\CronometerMonitorResult.json` | Path for the final structured result JSON used by downstream tools such as n8n |
 | `ForceRawDump` | switch | off | Overwrite the raw response file even if it exists |
 | `ProteinGoalGrams` | double | `150` | Daily protein goal in grams |
 | `CalorieGoal` | double | `2200` | Daily calorie goal in kcal |
@@ -291,6 +299,8 @@ The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on fir
 
 For normal console use, the script also promotes the matched selector values and summary fields to top-level properties so you do not need to expand `OutputMetadata` just to see what happened.
 
+On every run, the final structured output object is also written to `.\logs\CronometerMonitorResult.json`. This is the file intended for downstream tools such as n8n.
+
 ---
 
 ## Tests
@@ -335,6 +345,7 @@ Cronometer-Monitor\
     logs\
         CronometerMonitor.log               CMTrace-formatted activity log
         CronometerDiaryRawResponse.json     Raw DOM response for inspection
+        CronometerMonitorResult.json        Final structured result JSON for downstream tools
 ```
 
 ---

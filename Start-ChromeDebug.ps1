@@ -37,7 +37,7 @@ $ErrorActionPreference = 'Stop'
 # Kill existing Chrome
 $running = Get-Process chrome -ErrorAction SilentlyContinue
 if ($running) {
-    Write-Host ("Stopping {0} Chrome process(es)..." -f @($running).Count)
+    Write-Output ("Stopping {0} Chrome process(es)..." -f @($running).Count)
     $running | Stop-Process -Force
     Start-Sleep -Seconds 2
 }
@@ -53,7 +53,7 @@ if (Test-Path -LiteralPath $prefsPath) {
         $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exit_type'      -Value 'Normal' -Force
         $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exited_cleanly' -Value $true    -Force
         $prefs | ConvertTo-Json -Depth 100 -Compress | Set-Content -LiteralPath $prefsPath -Encoding UTF8
-        Write-Host 'Cleared Chrome session restore flag.'
+        Write-Output 'Cleared Chrome session restore flag.'
     }
     catch {
         Write-Warning ("Could not clear session restore flag: {0}" -f $_.Exception.Message)
@@ -61,7 +61,7 @@ if (Test-Path -LiteralPath $prefsPath) {
 }
 
 # Launch Chrome with remote debugging
-Write-Host ("Launching Chrome with remote debugging on port {0}..." -f $Port)
+Write-Output ("Launching Chrome with remote debugging on port {0}..." -f $Port)
 Start-Process -FilePath $ChromePath -ArgumentList @(
     "--remote-debugging-port=$Port",
     "--remote-debugging-address=0.0.0.0",
@@ -75,8 +75,8 @@ Start-Sleep -Seconds 3
 # Verify
 try {
     $tabs = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json" -TimeoutSec 10
-    Write-Host ("Chrome is ready. {0} tab(s) open." -f @($tabs).Count)
-    Write-Host 'Navigate to your Cronometer diary date, then run Invoke-CronometerMonitor.ps1.'
+    Write-Output ("Chrome is ready. {0} tab(s) open." -f @($tabs).Count)
+    Write-Output 'Navigate to your Cronometer diary date, then run Invoke-CronometerMonitor.ps1.'
 }
 catch {
     Write-Warning 'Chrome did not respond on the debug port. Try waiting a few seconds and running: Invoke-RestMethod -Uri ''http://localhost:9222/json'''

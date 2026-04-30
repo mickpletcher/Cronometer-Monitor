@@ -39,6 +39,10 @@ Path to the CMTrace-compatible log file.
 Path where the raw DOM response JSON will be saved for inspection.
 
 ===========================================================================
+.PARAMETER ResultJsonPath
+Path where the final structured result JSON will be saved for downstream tools such as n8n.
+
+===========================================================================
 .PARAMETER ForceRawDump
 Always overwrite the raw response file even if it already exists.
 
@@ -89,6 +93,9 @@ param(
 
     [Parameter()]
     [string]$RawResponsePath = (Join-Path -Path $PSScriptRoot -ChildPath 'logs\CronometerDiaryRawResponse.json'),
+
+    [Parameter()]
+    [string]$ResultJsonPath = (Join-Path -Path $PSScriptRoot -ChildPath 'logs\CronometerMonitorResult.json'),
 
     [Parameter()]
     [switch]$ForceRawDump,
@@ -471,7 +478,12 @@ function Invoke-ChromeDevToolsCommand {
     }
     finally {
         if ($ws -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
-            try { $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, 'done', [System.Threading.CancellationToken]::None).Wait() } catch {}
+            try {
+                $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, 'done', [System.Threading.CancellationToken]::None).Wait()
+            }
+            catch {
+                Write-CMTraceLog -Message ("CDP WebSocket close failed. {0}" -f $_.Exception.Message) -Level Warning -Path $LogPath
+            }
         }
         if ($ws) { $ws.Dispose() }
     }
@@ -856,6 +868,7 @@ function ConvertFrom-NutritionResponse {
             RequiredFieldsPresent   = if ($ValidationResult) { $ValidationResult.IsValid } else { $false }
             MissingRequiredFields   = if ($ValidationResult) { @($ValidationResult.MissingRequiredFields) } else { @() }
             MissingRequiredSummary  = if ($ValidationResult -and @($ValidationResult.MissingRequiredFields).Count -gt 0) { @($ValidationResult.MissingRequiredFields) -join ', ' } else { 'None' }
+            Nutrients               = $allNutrients
             Alerts                  = @($alerts)
             ExtractionMethod        = 'DOM'
             ExtractionAttemptsUsed  = $AttemptsUsed
@@ -917,8 +930,36 @@ function Save-RawResponse {
     }
 }
 
-function Start-CronometerMonitor {
+function Save-ResultJson {
     [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Result,
+
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [string]$LogPath
+    )
+
+    try {
+        $directory = Split-Path -Path $Path -Parent
+        if (-not [string]::IsNullOrWhiteSpace($directory) -and -not (Test-Path -LiteralPath $directory)) {
+            New-Item -Path $directory -ItemType Directory -Force | Out-Null
+        }
+
+        $json = $Result | ConvertTo-Json -Depth 10
+        Set-Content -Path $Path -Value $json -Encoding UTF8
+        Write-StageLog -Stage 'Persist' -Category 'Output' -Path $LogPath -Message ("Saved structured result JSON to '{0}'." -f $Path)
+    }
+    catch {
+        Write-StageLog -Stage 'Persist' -Category 'Output' -Level Warning -Path $LogPath -Message ("Failed to save structured result JSON to '{0}'. {1}" -f $Path, $_.Exception.Message)
+    }
+}
+
+function Start-CronometerMonitor {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]
         [int]$Port,
@@ -939,6 +980,9 @@ function Start-CronometerMonitor {
         [string]$RawResponsePath,
 
         [Parameter(Mandatory)]
+        [string]$ResultJsonPath,
+
+        [Parameter(Mandatory)]
         [bool]$ForceRawDump,
 
         [Parameter(Mandatory)]
@@ -953,6 +997,10 @@ function Start-CronometerMonitor {
         [Parameter(Mandatory)]
         [double]$FatGoalGrams
     )
+
+    if (-not $PSCmdlet.ShouldProcess('Cronometer monitor session', 'Run extraction and persist outputs')) {
+        return
+    }
 
     Write-StageLog -Stage 'Start' -Category 'Lifecycle' -Path $LogPath -Message 'Cronometer monitor run started.'
 
@@ -980,6 +1028,8 @@ function Start-CronometerMonitor {
         -AttemptsUsed          $extractionResult.AttemptsUsed `
         -LogPath               $LogPath
 
+    Save-ResultJson -Result $result -Path $ResultJsonPath -LogPath $LogPath
+
     Write-StageLog -Stage 'Complete' -Category 'Lifecycle' -Path $LogPath -Level $(if ($result.RequiredFieldsPresent) { 'Info' } else { 'Warning' }) -Message ("Monitor run complete. Status: {0}. Validation: {1}. Attempts: {2}. Date: {3}. Calories: {4:F0}/{5}. Protein: {6:F1}g/{7}g." -f `
         $result.QueryStatus, $result.ValidationStatus, $result.ExtractionAttemptsUsed, $result.DiaryDate, $result.CaloriesConsumed, $result.CalorieGoal, `
         $result.ProteinGrams, $result.ProteinGoalGrams)
@@ -1000,6 +1050,7 @@ if ($MyInvocation.InvocationName -ne '.') {
             -ShouldLaunchChrome    $LaunchChrome.IsPresent `
             -LogPath               $LogPath `
             -RawResponsePath       $RawResponsePath `
+            -ResultJsonPath        $ResultJsonPath `
             -ForceRawDump          $ForceRawDump.IsPresent `
             -CalorieGoal           $CalorieGoal `
             -ProteinGoalGrams      $ProteinGoalGrams `

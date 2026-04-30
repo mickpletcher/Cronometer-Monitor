@@ -19,6 +19,7 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 - Console-friendly display fields: `MissingRequiredSummary`, `DateSelectorUsed`, `TablesSelectorUsed`, `NutrientNameSelectorUsed`, `NutrientValueSelectorUsed`, `NutrientUnitSelectorUsed`, and `MissingSignalsSummary`.
 - `OutputMetadata` now includes `SelectorMatchesSummary` and `MissingSignalsSummary` for cleaner default `Format-List` output.
 - `Tests\Invoke-CronometerMonitor.Output.Tests.ps1` plus fixture files for output shaping regression coverage.
+- `ResultJsonPath` parameter and `logs\CronometerMonitorResult.json` output for downstream tools such as n8n.
 
 ### Changed
 
@@ -30,6 +31,7 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 - `ConvertFrom-NutritionResponse` now standardizes the output schema at version `2.0` and surfaces validation state instead of treating all partial extraction results as generic `NoDataFound`.
 - `ConvertFrom-NutritionResponse` now promotes matched selector details and summary fields to top-level properties so they render clearly in default PowerShell console output.
 - `Invoke-CronometerMonitor.ps1` now skips the main execution block when dot-sourced so regression tests can load the helper functions without starting a live Chrome session.
+- `Start-CronometerMonitor` now writes the final structured result object to JSON on every run instead of only returning it to the caller.
 - `README.md` updated to document the hardened DOM workflow, validation behavior, retry behavior, and the expanded output schema.
 - `future-upgrades.md` updated to mark Tier 1 extraction hardening complete and shift the near term focus to tests and the next service layer work.
 
