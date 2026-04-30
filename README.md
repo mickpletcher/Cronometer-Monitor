@@ -142,7 +142,7 @@ This opens `http://localhost:8876/dashboard/` and loads `logs\CronometerMonitorR
 ## Parameters
 
 | Parameter | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `DebuggingPort` | int | `9222` | Chrome remote debugging port |
 | `ChromePath` | string | `C:\Program Files\Google\Chrome\Application\chrome.exe` | Path to chrome.exe |
 | `UserDataDir` | string | `%LOCALAPPDATA%\Google\Chrome\CronometerDebug` | Chrome profile directory used when `-LaunchChrome` is specified |
@@ -165,7 +165,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 ### Macros and goals
 
 | Property | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `DiaryDate` | string | Date displayed in the Cronometer browser window (e.g. "Apr 28") |
 | `CaloriesConsumed` | double | Total energy logged in kcal |
 | `CaloriesRemaining` | double | kcal remaining to reach goal |
@@ -184,7 +184,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 ### Additional macros
 
 | Property | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `FiberGrams` | double | Dietary fiber |
 | `SugarsGrams` | double | Total sugars |
 | `AddedSugarsGrams` | double | Added sugars |
@@ -196,7 +196,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 ### Minerals
 
 | Property | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `SodiumMg` | double | Sodium in milligrams |
 | `PotassiumMg` | double | Potassium in milligrams |
 | `CalciumMg` | double | Calcium in milligrams |
@@ -211,7 +211,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 ### Vitamins
 
 | Property | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `VitaminA_ug` | double | Vitamin A in micrograms |
 | `VitaminC_mg` | double | Vitamin C in milligrams |
 | `VitaminD_IU` | double | Vitamin D in IU |
@@ -228,7 +228,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 ### Meta
 
 | Property | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `Nutrients` | object[] | Every nutrient on the page as `{ Name, Value, Unit }` |
 | `Alerts` | string[] | One entry per macro that is below its daily goal |
 | `SchemaVersion` | string | Current output schema version |
@@ -249,7 +249,7 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 
 ### Example output
 
-```
+```text
 SchemaVersion          : 2.0
 DiaryDate               : Apr 28
 CaloriesConsumed        : 1625.3
@@ -342,7 +342,7 @@ The nutrition summary panels must be visible and fully loaded in the browser for
 
 ## File Structure
 
-```
+```text
 Cronometer-Monitor\
     Invoke-CronometerMonitor.ps1    Main script
     Start-ChromeDebug.ps1           Chrome launcher with remote debugging
