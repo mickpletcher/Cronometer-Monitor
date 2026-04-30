@@ -6,11 +6,19 @@ PowerShell tool that connects to an authenticated Chrome browser session and ext
 
 ## How It Works
 
-Chrome exposes a remote debugging interface when launched with `--remote-debugging-port`. The script connects to that interface, finds the open Cronometer tab, and uses the Chrome DevTools Protocol to execute JavaScript inside the page. The JavaScript reads the rendered nutrition summary panels from the DOM and returns all nutrient values, units, and the displayed diary date as a JSON object. The script parses that response and returns a structured PowerShell object.
+Chrome exposes a remote debugging interface when launched with `--remote-debugging-port`. The script connects to that interface, finds the open Cronometer tab, and uses the Chrome DevTools Protocol to execute JavaScript inside the page. The JavaScript reads the rendered nutrition summary panels from the DOM and returns all nutrient values, units, selector diagnostics, and the displayed diary date as a JSON object. The script validates required fields, retries a few times if the page is not ready yet, and returns a structured PowerShell object with a schema version and extraction metadata.
 
 Cronometer's backend uses a proprietary GWT-RPC serialization format. There is no single API endpoint that returns pre-summed daily nutrition totals. The browser calculates totals client-side and renders them into the page. DOM scraping is the correct and reliable approach.
 
 The script reads whatever diary date is currently displayed in the Chrome window. To extract a different date, navigate to it in Chrome before running the script.
+
+### Reliability features
+
+- Fallback DOM selectors for the diary date, nutrient tables, nutrient names, nutrient values, and units
+- Required field validation for `Energy`, `Protein`, `Carbs`, and `Fat`
+- Bounded retry behavior when the page is open but the nutrition table is not ready yet
+- Stage based logging with category markers for browser, extraction, validation, parsing, and lifecycle events
+- Stable output schema with `SchemaVersion`, validation status, retry count, and extraction metadata
 
 ---
 
@@ -204,12 +212,19 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 |---|---|---|
 | `Nutrients` | object[] | Every nutrient on the page as `{ Name, Value, Unit }` |
 | `Alerts` | string[] | One entry per macro that is below its daily goal |
-| `QueryStatus` | string | `Parsed` when nutrients were found, `NoDataFound` if the summary panel was not visible |
+| `SchemaVersion` | string | Current output schema version |
+| `QueryStatus` | string | `Parsed` when validation passed, `ValidationFailed` when required fields were missing or invalid |
+| `ValidationStatus` | string | Validation result for the required field check |
+| `RequiredFieldsPresent` | bool | `True` when the required macro fields were extracted and parsed correctly |
+| `MissingRequiredFields` | string[] | Missing or invalid required fields |
 | `ExtractionMethod` | string | Always `DOM` |
+| `ExtractionAttemptsUsed` | int | Number of extraction attempts used before returning output |
+| `OutputMetadata` | object | Selector matches, nutrient count, table count, and missing extraction signals |
 
 ### Example output
 
 ```
+SchemaVersion          : 2.0
 DiaryDate               : Apr 28
 CaloriesConsumed        : 1625.3
 CaloriesRemaining       : 574.7
@@ -242,16 +257,23 @@ B12_Cobalamin_ug        : 1.8
 Nutrients               : { 38 entries }
 Alerts                  : { Calories below goal: 1625 kcal consumed / 2200 kcal goal (575 kcal remaining) }
 QueryStatus             : Parsed
+ValidationStatus        : Passed
+RequiredFieldsPresent   : True
+MissingRequiredFields   : {}
 ExtractionMethod        : DOM
+ExtractionAttemptsUsed  : 1
+OutputMetadata          : @{SchemaVersion=2.0; SelectorMatches=...; TableCount=2; NutrientCount=38; MissingSignals=System.Object[]}
 ```
 
 ---
 
 ## Logs
 
-All activity is written to a CMTrace-compatible log file at `.\logs\CronometerMonitor.log` by default. The log can be opened in CMTrace or the Configuration Manager log viewer for real-time viewing. Each entry includes timestamp, severity (Info / Warning / Error), thread ID, and execution context.
+All activity is written to a CMTrace-compatible log file at `.\logs\CronometerMonitor.log` by default. The log can be opened in CMTrace or the Configuration Manager log viewer for real-time viewing. Each entry includes timestamp, severity, thread ID, and execution context.
 
-The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients }` object extracted from the page and is useful for verifying what the script read from the browser.
+The script now writes stage and category markers into the message body so you can tell whether a message came from browser discovery, DOM extraction, validation, parsing, retry wait, or run completion.
+
+The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients, metadata }` object extracted from the page and is useful for verifying what the script read from the browser.
 
 ---
 
@@ -272,6 +294,8 @@ Cronometer-Monitor\
     CHANGELOG.md                    Version history and change log
     PLAN.md                         Architecture and build plan
     ANALYSIS.md                     Original project analysis
+    docs\                           Repo audit and support docs
+    specs\                          GitHub Spec packages for non-trivial changes
     README.md                       This file
     logs\
         CronometerMonitor.log               CMTrace-formatted activity log

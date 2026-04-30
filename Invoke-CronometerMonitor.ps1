@@ -157,6 +157,137 @@ function Write-CMTraceLog {
     }
 }
 
+function Write-StageLog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Stage,
+
+        [Parameter(Mandatory)]
+        [string]$Message,
+
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter()]
+        [ValidateSet('Info', 'Warning', 'Error')]
+        [string]$Level = 'Info',
+
+        [Parameter()]
+        [string]$Category = 'General'
+    )
+
+    Write-CMTraceLog -Message ("[Stage:{0}][Category:{1}] {2}" -f $Stage, $Category, $Message) -Level $Level -Path $Path
+}
+
+function Get-SelectorRegistry {
+    [CmdletBinding()]
+    param()
+
+    return @{
+        date = @(
+            '.diary-date-btn',
+            '[class*="diary-date"]',
+            '[data-testid="diary-date"]'
+        )
+        tables = @(
+            'table.targets-table',
+            'table[class*="targets-table"]',
+            '[data-testid="nutrition-targets-table"]'
+        )
+        nutrientName = @(
+            '.nutrient-name',
+            '[class*="nutrient-name"]',
+            'td:first-child .gwt-HTML',
+            'td:first-child .gwt-Label'
+        )
+        nutrientValue = @(
+            '.targets-table-number .gwt-HTML',
+            '.targets-table-number',
+            'td:nth-child(2) .gwt-HTML',
+            'td:nth-child(2)'
+        )
+        nutrientUnit = @(
+            'td:nth-child(3) .gwt-Label',
+            'td:nth-child(3) .gwt-HTML',
+            'td:nth-child(3)'
+        )
+    }
+}
+
+function Test-NutritionExtractionPayload {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RawJson,
+
+        [Parameter(Mandatory)]
+        [string]$LogPath
+    )
+
+    $missingRequiredFields = [System.Collections.Generic.List[string]]::new()
+    $diagnostics = $null
+
+    try {
+        $payload = $RawJson | ConvertFrom-Json -Depth 10
+        $nutrients = $payload.nutrients
+        $diagnostics = $payload.metadata
+    }
+    catch {
+        Write-StageLog -Stage 'Validate' -Category 'Validation' -Level Error -Path $LogPath -Message ("Failed to parse DOM payload for validation. {0}" -f $_.Exception.Message)
+        return [pscustomobject]@{
+            IsValid               = $false
+            QueryStatus           = 'ValidationFailed'
+            ValidationStatus      = 'InvalidJson'
+            MissingRequiredFields = @('RawJson')
+            Diagnostics           = $null
+            ShouldRetry           = $true
+        }
+    }
+
+    if (-not $payload.date -or $payload.date -eq 'Unknown') {
+        $missingRequiredFields.Add('DiaryDate')
+    }
+
+    foreach ($fieldName in @('Energy', 'Protein', 'Carbs', 'Fat')) {
+        $property = $null
+        if ($nutrients) {
+            $property = $nutrients.PSObject.Properties[$fieldName]
+        }
+
+        if (-not $property) {
+            $missingRequiredFields.Add($fieldName)
+            continue
+        }
+
+        $valueText = [string]$property.Value.value
+        $parsedValue = 0.0
+        if (-not [double]::TryParse($valueText, [ref]$parsedValue)) {
+            $missingRequiredFields.Add($fieldName)
+        }
+    }
+
+    $isValid = ($missingRequiredFields.Count -eq 0)
+    $validationStatus = if ($isValid) { 'Passed' } else { 'MissingRequiredFields' }
+    $queryStatus = if ($isValid) { 'Parsed' } else { 'ValidationFailed' }
+
+    if ($isValid) {
+        Write-StageLog -Stage 'Validate' -Category 'Validation' -Path $LogPath -Message 'Required fields passed validation.'
+    }
+    else {
+        Write-StageLog -Stage 'Validate' -Category 'Validation' -Level Warning -Path $LogPath -Message ("Required fields missing or invalid: {0}" -f ($missingRequiredFields -join ', '))
+    }
+
+    return [pscustomobject]@{
+        IsValid               = $isValid
+        QueryStatus           = $queryStatus
+        ValidationStatus      = $validationStatus
+        MissingRequiredFields = @($missingRequiredFields)
+        Diagnostics           = $diagnostics
+        ShouldRetry           = (-not $isValid)
+    }
+}
+
 function Clear-ChromeSessionRestore {
     [CmdletBinding()]
     param(
@@ -356,19 +487,81 @@ function Get-NutritionDataViaDOM {
         [string]$LogPath
     )
 
-    $domScript = @'
+    $selectorRegistryJson = (Get-SelectorRegistry | ConvertTo-Json -Depth 10 -Compress)
+    $domScript = @"
 (() => {
-    var dateEl = document.querySelector('.diary-date-btn');
-    var date   = dateEl ? dateEl.innerText.trim() : 'Unknown';
+    var selectorRegistry = $selectorRegistryJson;
+    var metadata = {
+        selectorMatches: {},
+        tableCount: 0,
+        nutrientCount: 0,
+        missingSignals: []
+    };
+
+    function firstMatch(selectors, root) {
+        var scope = root || document;
+        for (var i = 0; i < selectors.length; i++) {
+            var selector = selectors[i];
+            var match = scope.querySelector(selector);
+            if (match) {
+                return { element: match, selector: selector };
+            }
+        }
+
+        return { element: null, selector: '' };
+    }
+
+    function allMatches(selectors, root) {
+        var scope = root || document;
+        for (var i = 0; i < selectors.length; i++) {
+            var selector = selectors[i];
+            var matches = scope.querySelectorAll(selector);
+            if (matches && matches.length > 0) {
+                return { elements: matches, selector: selector };
+            }
+        }
+
+        return { elements: [], selector: '' };
+    }
+
+    var dateMatch = firstMatch(selectorRegistry.date);
+    metadata.selectorMatches.date = dateMatch.selector;
+    var date = dateMatch.element ? dateMatch.element.innerText.trim() : 'Unknown';
+    if (!dateMatch.element) {
+        metadata.missingSignals.push('DiaryDateSelector');
+    }
 
     var nutrients = {};
-    var tables = document.querySelectorAll('table.targets-table');
+    var tableMatch = allMatches(selectorRegistry.tables);
+    metadata.selectorMatches.tables = tableMatch.selector;
+    var tables = tableMatch.elements;
+    metadata.tableCount = tables.length;
+    if (!tableMatch.selector) {
+        metadata.missingSignals.push('NutritionTableSelector');
+    }
+
     tables.forEach(function(table) {
         var rows = table.querySelectorAll('tr:not(.table-header)');
         rows.forEach(function(row) {
-            var nameEl = row.querySelector('.nutrient-name');
-            var valEl  = row.querySelector('.targets-table-number .gwt-HTML');
-            var unitEl = row.querySelector('td:nth-child(3) .gwt-Label');
+            var nameMatch = firstMatch(selectorRegistry.nutrientName, row);
+            var valueMatch = firstMatch(selectorRegistry.nutrientValue, row);
+            var unitMatch = firstMatch(selectorRegistry.nutrientUnit, row);
+            var nameEl = nameMatch.element;
+            var valEl = valueMatch.element;
+            var unitEl = unitMatch.element;
+
+            if (!metadata.selectorMatches.nutrientName && nameMatch.selector) {
+                metadata.selectorMatches.nutrientName = nameMatch.selector;
+            }
+
+            if (!metadata.selectorMatches.nutrientValue && valueMatch.selector) {
+                metadata.selectorMatches.nutrientValue = valueMatch.selector;
+            }
+
+            if (!metadata.selectorMatches.nutrientUnit && unitMatch.selector) {
+                metadata.selectorMatches.nutrientUnit = unitMatch.selector;
+            }
+
             if (nameEl && valEl) {
                 var name  = nameEl.innerText.replace(/[ \s]+/g, ' ').trim();
                 var value = valEl.innerText.trim();
@@ -380,12 +573,26 @@ function Get-NutritionDataViaDOM {
         });
     });
 
-    return JSON.stringify({ date: date, nutrients: nutrients });
+    metadata.nutrientCount = Object.keys(nutrients).length;
+
+    if (!metadata.selectorMatches.nutrientName) {
+        metadata.missingSignals.push('NutrientNameSelector');
+    }
+
+    if (!metadata.selectorMatches.nutrientValue) {
+        metadata.missingSignals.push('NutrientValueSelector');
+    }
+
+    if (metadata.nutrientCount === 0) {
+        metadata.missingSignals.push('NoNutrientsExtracted');
+    }
+
+    return JSON.stringify({ date: date, nutrients: nutrients, metadata: metadata });
 })();
-'@
+"@
 
     try {
-        Write-CMTraceLog -Message 'Extracting nutrition data from Cronometer DOM.' -Path $LogPath
+        Write-StageLog -Stage 'Extract' -Category 'DOM' -Path $LogPath -Message 'Extracting nutrition data from Cronometer DOM.'
 
         $cdpParams = @{
             expression    = $domScript
@@ -403,15 +610,67 @@ function Get-NutritionDataViaDOM {
         }
 
         if ($response.result.result.type -eq 'string') {
-            Write-CMTraceLog -Message 'DOM extraction succeeded.' -Path $LogPath
+            Write-StageLog -Stage 'Extract' -Category 'DOM' -Path $LogPath -Message 'DOM extraction returned a payload.'
             return $response.result.result.value
         }
 
         throw 'DOM extraction returned an unexpected response type.'
     }
     catch {
-        Write-CMTraceLog -Message ("DOM extraction failed. {0}" -f $_.Exception.Message) -Level Error -Path $LogPath
+        Write-StageLog -Stage 'Extract' -Category 'DOM' -Level Error -Path $LogPath -Message ("DOM extraction failed. {0}" -f $_.Exception.Message)
         throw
+    }
+}
+
+function Invoke-RetryableNutritionExtraction {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$WebSocketDebuggerUrl,
+
+        [Parameter(Mandatory)]
+        [string]$LogPath,
+
+        [Parameter()]
+        [int]$MaxAttempts = 3,
+
+        [Parameter()]
+        [int]$DelaySeconds = 2
+    )
+
+    $lastRawJson = $null
+    $lastValidation = $null
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        Write-StageLog -Stage 'ExtractAttempt' -Category 'DOM' -Path $LogPath -Message ("Starting DOM extraction attempt {0} of {1}." -f $attempt, $MaxAttempts)
+
+        $lastRawJson = Get-NutritionDataViaDOM -WebSocketDebuggerUrl $WebSocketDebuggerUrl -LogPath $LogPath
+        $lastValidation = Test-NutritionExtractionPayload -RawJson $lastRawJson -LogPath $LogPath
+
+        if ($lastValidation.IsValid) {
+            Write-StageLog -Stage 'ExtractAttempt' -Category 'DOM' -Path $LogPath -Message ("DOM extraction attempt {0} passed validation." -f $attempt)
+            return [pscustomobject]@{
+                RawJson         = $lastRawJson
+                Validation      = $lastValidation
+                AttemptsUsed    = $attempt
+                MaxAttempts     = $MaxAttempts
+                RetryExhausted  = $false
+            }
+        }
+
+        if ($attempt -lt $MaxAttempts -and $lastValidation.ShouldRetry) {
+            Write-StageLog -Stage 'RetryWait' -Category 'DOM' -Level Warning -Path $LogPath -Message ("Validation failed on attempt {0}. Waiting {1} second(s) before retry." -f $attempt, $DelaySeconds)
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+
+    Write-StageLog -Stage 'ExtractAttempt' -Category 'DOM' -Level Warning -Path $LogPath -Message ("DOM extraction exhausted {0} attempt(s) without passing validation." -f $MaxAttempts)
+    return [pscustomobject]@{
+        RawJson         = $lastRawJson
+        Validation      = $lastValidation
+        AttemptsUsed    = $MaxAttempts
+        MaxAttempts     = $MaxAttempts
+        RetryExhausted  = $true
     }
 }
 
@@ -434,6 +693,12 @@ function ConvertFrom-NutritionResponse {
         [double]$FatGoalGrams,
 
         [Parameter(Mandatory)]
+        [object]$ValidationResult,
+
+        [Parameter(Mandatory)]
+        [int]$AttemptsUsed,
+
+        [Parameter(Mandatory)]
         [string]$LogPath
     )
 
@@ -448,10 +713,11 @@ function ConvertFrom-NutritionResponse {
         $parsed    = $RawJson | ConvertFrom-Json
         $diaryDate = $parsed.date
         $n         = $parsed.nutrients
+        $metadata  = $parsed.metadata
         $nutrientPropertyCount = @($n.PSObject.Properties).Count
 
         if (-not $n -or $nutrientPropertyCount -eq 0) {
-            Write-CMTraceLog -Message 'No nutrients found in DOM response. Ensure the Cronometer diary page is open and the nutrition summary panel is visible.' -Level Warning -Path $LogPath
+            Write-StageLog -Stage 'Validate' -Category 'Validation' -Level Warning -Path $LogPath -Message 'No nutrients found in DOM response. Ensure the Cronometer diary page is open and the nutrition summary panel is visible.'
         }
 
         $calories      = Get-NVal $n 'Energy'
@@ -522,6 +788,7 @@ function ConvertFrom-NutritionResponse {
         }
 
         return [pscustomobject]@{
+            SchemaVersion          = '2.0'
             DiaryDate               = $diaryDate
             CaloriesConsumed        = $calories
             CaloriesRemaining       = $caloriesRemaining
@@ -565,13 +832,24 @@ function ConvertFrom-NutritionResponse {
             B6_Pyridoxine_mg        = $vitB6
             B12_Cobalamin_ug        = $vitB12
             Folate_ug               = $folate
-            QueryStatus             = if ($n -and $nutrientPropertyCount -gt 0) { 'Parsed' } else { 'NoDataFound' }
+            QueryStatus             = if ($ValidationResult) { $ValidationResult.QueryStatus } elseif ($n -and $nutrientPropertyCount -gt 0) { 'Parsed' } else { 'NoDataFound' }
+            ValidationStatus        = if ($ValidationResult) { $ValidationResult.ValidationStatus } else { 'NotRun' }
+            RequiredFieldsPresent   = if ($ValidationResult) { $ValidationResult.IsValid } else { $false }
+            MissingRequiredFields   = if ($ValidationResult) { @($ValidationResult.MissingRequiredFields) } else { @() }
             Alerts                  = @($alerts)
             ExtractionMethod        = 'DOM'
+            ExtractionAttemptsUsed  = $AttemptsUsed
+            OutputMetadata          = [pscustomobject]@{
+                SchemaVersion        = '2.0'
+                SelectorMatches      = if ($metadata) { $metadata.selectorMatches } else { $null }
+                TableCount           = if ($metadata) { [int]$metadata.tableCount } else { 0 }
+                NutrientCount        = if ($metadata) { [int]$metadata.nutrientCount } else { 0 }
+                MissingSignals       = if ($metadata) { @($metadata.missingSignals) } else { @() }
+            }
         }
     }
     catch {
-        Write-CMTraceLog -Message ("Failed to parse nutrition response. {0}" -f $_.Exception.Message) -Level Error -Path $LogPath
+        Write-StageLog -Stage 'Parse' -Category 'Output' -Level Error -Path $LogPath -Message ("Failed to parse nutrition response. {0}" -f $_.Exception.Message)
         throw
     }
 }
@@ -648,7 +926,7 @@ function Start-CronometerMonitor {
         [double]$FatGoalGrams
     )
 
-    Write-CMTraceLog -Message 'Cronometer monitor run started.' -Path $LogPath
+    Write-StageLog -Stage 'Start' -Category 'Lifecycle' -Path $LogPath -Message 'Cronometer monitor run started.'
 
     if ($ShouldLaunchChrome) {
         Connect-ChromeForDebugging -ChromePath $ChromePath -UserDataDir $UserDataDir -Port $Port -LogPath $LogPath
@@ -657,9 +935,10 @@ function Start-CronometerMonitor {
     $tabs  = Get-ChromeDebugEndpoint -Port $Port -LogPath $LogPath
     $tab   = Get-CronometerTab -Tabs $tabs -LogPath $LogPath
     $wsUrl = $tab.webSocketDebuggerUrl
-    Write-CMTraceLog -Message ("Attaching to tab via WebSocket: '{0}'." -f $wsUrl) -Path $LogPath
+    Write-StageLog -Stage 'Connect' -Category 'Browser' -Path $LogPath -Message ("Attaching to tab via WebSocket: '{0}'." -f $wsUrl)
 
-    $rawJson = Get-NutritionDataViaDOM -WebSocketDebuggerUrl $wsUrl -LogPath $LogPath
+    $extractionResult = Invoke-RetryableNutritionExtraction -WebSocketDebuggerUrl $wsUrl -LogPath $LogPath -MaxAttempts 3 -DelaySeconds 2
+    $rawJson = $extractionResult.RawJson
 
     Save-RawResponse -Content $rawJson -Path $RawResponsePath -Force:$ForceRawDump -LogPath $LogPath
 
@@ -669,11 +948,13 @@ function Start-CronometerMonitor {
         -ProteinGoalGrams      $ProteinGoalGrams `
         -CarbohydrateGoalGrams $CarbohydrateGoalGrams `
         -FatGoalGrams          $FatGoalGrams `
+        -ValidationResult      $extractionResult.Validation `
+        -AttemptsUsed          $extractionResult.AttemptsUsed `
         -LogPath               $LogPath
 
-    Write-CMTraceLog -Message ("Monitor run complete. Status: {0}. Date: {1}. Calories: {2:F0}/{3}. Protein: {4:F1}g/{5}g." -f `
-        $result.QueryStatus, $result.DiaryDate, $result.CaloriesConsumed, $result.CalorieGoal, `
-        $result.ProteinGrams, $result.ProteinGoalGrams) -Path $LogPath
+    Write-StageLog -Stage 'Complete' -Category 'Lifecycle' -Path $LogPath -Level $(if ($result.RequiredFieldsPresent) { 'Info' } else { 'Warning' }) -Message ("Monitor run complete. Status: {0}. Validation: {1}. Attempts: {2}. Date: {3}. Calories: {4:F0}/{5}. Protein: {6:F1}g/{7}g." -f `
+        $result.QueryStatus, $result.ValidationStatus, $result.ExtractionAttemptsUsed, $result.DiaryDate, $result.CaloriesConsumed, $result.CalorieGoal, `
+        $result.ProteinGrams, $result.ProteinGoalGrams)
 
     return $result
 }
