@@ -1,12 +1,16 @@
 # Cronometer Monitor
 
-PowerShell tool that connects to an authenticated Chrome browser session and extracts daily nutrition and diary data from Cronometer. No credentials are stored. The script attaches to the existing Chrome session using the Chrome DevTools Protocol and reads data directly from the authenticated page context.
+PowerShell tool that connects to an authenticated Chrome browser session and extracts daily nutrition and diary data from Cronometer. No credentials are stored. The script attaches to the existing Chrome session using the Chrome DevTools Protocol and reads data directly from the rendered page.
 
 ---
 
 ## How It Works
 
-Chrome exposes a remote debugging interface when launched with `--remote-debugging-port`. The script connects to that interface, finds the open Cronometer tab, and injects a `fetch()` call into the page. Because the fetch runs inside the browser, it inherits the existing auth cookies automatically. The response is parsed and returned as a structured object with consumed totals, remaining values, and goal comparisons.
+Chrome exposes a remote debugging interface when launched with `--remote-debugging-port`. The script connects to that interface, finds the open Cronometer tab, and uses the Chrome DevTools Protocol to execute JavaScript inside the page. The JavaScript reads the rendered nutrition summary panels from the DOM and returns all nutrient values, units, and the displayed diary date as a JSON object. The script parses that response and returns a structured PowerShell object.
+
+Cronometer's backend uses a proprietary GWT-RPC serialization format. There is no single API endpoint that returns pre-summed daily nutrition totals. The browser calculates totals client-side and renders them into the page. DOM scraping is the correct and reliable approach.
+
+The script reads whatever diary date is currently displayed in the Chrome window. To extract a different date, navigate to it in Chrome before running the script.
 
 ---
 
@@ -26,13 +30,13 @@ Chrome must be running with remote debugging enabled. There are two ways to do t
 
 ### Option A: Let the script launch Chrome
 
-Run the script with `-LaunchChrome`. This closes and relaunches Chrome with remote debugging pointed at your real user profile so your existing Cronometer login is preserved.
+Run the script with `-LaunchChrome`. This kills any running Chrome processes, clears the session restore flag so Chrome does not prompt to restore tabs, then relaunches Chrome with remote debugging pointed at your real user profile so your existing Cronometer login is preserved.
 
 ```powershell
 .\Invoke-CronometerMonitor.ps1 -LaunchChrome
 ```
 
-Chrome will open to `cronometer.com`. Log in if prompted, then run the script again without `-LaunchChrome` for all future runs as long as Chrome stays open.
+Chrome will open to `cronometer.com`. Log in if prompted, then navigate to the diary date you want to extract and run the script again without `-LaunchChrome` for all future runs as long as Chrome stays open.
 
 ### Option B: Launch Chrome manually
 
@@ -61,28 +65,22 @@ You should see a JSON array of open tabs. If a Cronometer tab is listed, the con
 
 ## Usage
 
-### Pull today's diary
+### Extract the currently displayed diary date
 
 ```powershell
 .\Invoke-CronometerMonitor.ps1
 ```
 
-### Pull a specific date
-
-```powershell
-.\Invoke-CronometerMonitor.ps1 -Date '2026-04-28'
-```
-
-### Force a fresh raw response dump for schema inspection
+### Save a raw response dump for inspection
 
 ```powershell
 .\Invoke-CronometerMonitor.ps1 -ForceRawDump
 ```
 
-### Launch Chrome and pull today's diary in one command
+### Launch Chrome and extract in one command
 
 ```powershell
-.\Invoke-CronometerMonitor.ps1 -LaunchChrome -ForceRawDump
+.\Invoke-CronometerMonitor.ps1 -LaunchChrome
 ```
 
 ### Use a non-default Chrome path
@@ -103,80 +101,6 @@ You should see a JSON array of open tabs. If a Cronometer tab is listed, the con
 .\Invoke-CronometerMonitor.ps1 -CalorieGoal 2500 -ProteinGoalGrams 175 -CarbohydrateGoalGrams 250 -FatGoalGrams 80
 ```
 
----
-
-## Parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `DebuggingPort` | int | `9222` | Chrome remote debugging port |
-| `ChromePath` | string | `C:\Program Files\Google\Chrome\Application\chrome.exe` | Path to chrome.exe |
-| `UserDataDir` | string | `%LOCALAPPDATA%\Google\Chrome\User Data` | Chrome profile directory used when `-LaunchChrome` is specified |
-| `LaunchChrome` | switch | off | Launch Chrome with remote debugging before connecting |
-| `Date` | datetime | today | Diary date to query |
-| `LogPath` | string | `.\logs\CronometerMonitor.log` | CMTrace-compatible log file |
-| `RawResponsePath` | string | `.\logs\CronometerDiaryRawResponse.json` | Path for raw API response dump |
-| `ForceRawDump` | switch | off | Overwrite the raw response file even if it exists |
-| `ProteinGoalGrams` | double | `150` | Daily protein goal in grams |
-| `CalorieGoal` | double | `2200` | Daily calorie goal |
-| `CarbohydrateGoalGrams` | double | `200` | Daily carbohydrate goal in grams |
-| `FatGoalGrams` | double | `70` | Daily fat goal in grams |
-
----
-
-## Output
-
-The script returns a `PSCustomObject` with the following properties:
-
-| Property | Type | Description |
-|---|---|---|
-| `Date` | string | Query date in `yyyy-MM-dd` format |
-| `CaloriesConsumed` | double | Total calories logged |
-| `CaloriesRemaining` | double | Calories left to reach goal |
-| `CalorieGoal` | double | Daily calorie goal |
-| `ProteinGrams` | double | Protein consumed |
-| `ProteinRemainingGrams` | double | Protein left to reach goal |
-| `ProteinGoalGrams` | double | Daily protein goal |
-| `CarbohydratesGrams` | double | Carbohydrates consumed |
-| `CarbohydratesRemaining` | double | Carbohydrates left to reach goal |
-| `CarbohydrateGoalGrams` | double | Daily carbohydrate goal |
-| `FatGrams` | double | Fat consumed |
-| `FatRemainingGrams` | double | Fat left to reach goal |
-| `FatGoalGrams` | double | Daily fat goal |
-| `FiberGrams` | double | Fiber consumed |
-| `SodiumMg` | double | Sodium consumed in milligrams |
-| `PotassiumMg` | double | Potassium consumed in milligrams |
-| `Nutrients` | object[] | All tracked micronutrients: `{ Name, Unit, Value }` |
-| `Alerts` | string[] | One entry per macro that is below its daily goal |
-| `QueryStatus` | string | `Parsed` when data was extracted, `SchemaNeedsRefinement` if the response path was not found |
-| `ExtractionMethod` | string | `Network` (preferred) or `DOM` (fallback) |
-
-### Example output
-
-```
-Date                   : 2026-04-29
-CaloriesConsumed       : 1640
-CaloriesRemaining      : 560
-CalorieGoal            : 2200
-ProteinGrams           : 132.4
-ProteinRemainingGrams  : 17.6
-ProteinGoalGrams       : 150
-CarbohydratesGrams     : 178.2
-CarbohydratesRemaining : 21.8
-CarbohydrateGoalGrams  : 200
-FatGrams               : 54.1
-FatRemainingGrams      : 15.9
-FatGoalGrams           : 70
-FiberGrams             : 22.3
-SodiumMg               : 1840
-PotassiumMg            : 3120
-Nutrients              : { ... }
-Alerts                 : { Protein below goal: 132.4g consumed / 150g goal (17.6g remaining),
-                           Calories below goal: 1640 consumed / 2200 goal (560 remaining) }
-QueryStatus            : Parsed
-ExtractionMethod       : Network
-```
-
 ### Capture the result for downstream use
 
 ```powershell
@@ -187,56 +111,153 @@ $nutrition | ConvertTo-Json -Depth 5
 
 ---
 
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `DebuggingPort` | int | `9222` | Chrome remote debugging port |
+| `ChromePath` | string | `C:\Program Files\Google\Chrome\Application\chrome.exe` | Path to chrome.exe |
+| `UserDataDir` | string | `%LOCALAPPDATA%\Google\Chrome\User Data` | Chrome profile directory used when `-LaunchChrome` is specified |
+| `LaunchChrome` | switch | off | Kill existing Chrome, clear session restore flag, and relaunch with remote debugging |
+| `LogPath` | string | `.\logs\CronometerMonitor.log` | CMTrace-compatible log file |
+| `RawResponsePath` | string | `.\logs\CronometerDiaryRawResponse.json` | Path for raw DOM response dump |
+| `ForceRawDump` | switch | off | Overwrite the raw response file even if it exists |
+| `ProteinGoalGrams` | double | `150` | Daily protein goal in grams |
+| `CalorieGoal` | double | `2200` | Daily calorie goal in kcal |
+| `CarbohydrateGoalGrams` | double | `200` | Daily carbohydrate goal in grams |
+| `FatGoalGrams` | double | `70` | Daily fat goal in grams |
+
+---
+
+## Output
+
+The script returns a `PSCustomObject`. The diary date reflects what is displayed in the Chrome window at the time the script runs.
+
+### Macros and goals
+
+| Property | Type | Description |
+|---|---|---|
+| `DiaryDate` | string | Date displayed in the Cronometer browser window (e.g. "Apr 28") |
+| `CaloriesConsumed` | double | Total energy logged in kcal |
+| `CaloriesRemaining` | double | kcal remaining to reach goal |
+| `CalorieGoal` | double | Daily calorie goal |
+| `ProteinGrams` | double | Protein consumed |
+| `ProteinRemainingGrams` | double | Protein remaining to reach goal |
+| `ProteinGoalGrams` | double | Daily protein goal |
+| `CarbsGrams` | double | Total carbohydrates consumed |
+| `NetCarbsGrams` | double | Net carbs (total carbs minus fiber) |
+| `CarbsRemainingGrams` | double | Carbs remaining to reach goal |
+| `CarbohydrateGoalGrams` | double | Daily carbohydrate goal |
+| `FatGrams` | double | Total fat consumed |
+| `FatRemainingGrams` | double | Fat remaining to reach goal |
+| `FatGoalGrams` | double | Daily fat goal |
+
+### Additional macros
+
+| Property | Type | Description |
+|---|---|---|
+| `FiberGrams` | double | Dietary fiber |
+| `SugarsGrams` | double | Total sugars |
+| `AddedSugarsGrams` | double | Added sugars |
+| `SaturatedFatGrams` | double | Saturated fat |
+| `TransFatGrams` | double | Trans fat |
+| `CholesterolMg` | double | Cholesterol in milligrams |
+| `WaterG` | double | Water in grams |
+
+### Minerals
+
+| Property | Type | Description |
+|---|---|---|
+| `SodiumMg` | double | Sodium in milligrams |
+| `PotassiumMg` | double | Potassium in milligrams |
+| `CalciumMg` | double | Calcium in milligrams |
+| `IronMg` | double | Iron in milligrams |
+| `MagnesiumMg` | double | Magnesium in milligrams |
+| `PhosphorusMg` | double | Phosphorus in milligrams |
+| `ZincMg` | double | Zinc in milligrams |
+| `CopperMg` | double | Copper in milligrams |
+| `ManganeseMg` | double | Manganese in milligrams |
+| `SeleniumUg` | double | Selenium in micrograms |
+
+### Vitamins
+
+| Property | Type | Description |
+|---|---|---|
+| `VitaminA_ug` | double | Vitamin A in micrograms |
+| `VitaminC_mg` | double | Vitamin C in milligrams |
+| `VitaminD_IU` | double | Vitamin D in IU |
+| `VitaminE_mg` | double | Vitamin E in milligrams |
+| `VitaminK_ug` | double | Vitamin K in micrograms |
+| `B1_Thiamine_mg` | double | Vitamin B1 in milligrams |
+| `B2_Riboflavin_mg` | double | Vitamin B2 in milligrams |
+| `B3_Niacin_mg` | double | Vitamin B3 in milligrams |
+| `B5_PantothenicAcid_mg` | double | Vitamin B5 in milligrams |
+| `B6_Pyridoxine_mg` | double | Vitamin B6 in milligrams |
+| `B12_Cobalamin_ug` | double | Vitamin B12 in micrograms |
+| `Folate_ug` | double | Folate in micrograms |
+
+### Meta
+
+| Property | Type | Description |
+|---|---|---|
+| `Nutrients` | object[] | Every nutrient on the page as `{ Name, Value, Unit }` |
+| `Alerts` | string[] | One entry per macro that is below its daily goal |
+| `QueryStatus` | string | `Parsed` when nutrients were found, `NoDataFound` if the summary panel was not visible |
+| `ExtractionMethod` | string | Always `DOM` |
+
+### Example output
+
+```
+DiaryDate               : Apr 28
+CaloriesConsumed        : 1625.3
+CaloriesRemaining       : 574.7
+CalorieGoal             : 2200
+ProteinGrams            : 193.0
+ProteinRemainingGrams   : 0
+ProteinGoalGrams        : 150
+CarbsGrams              : 136.4
+NetCarbsGrams           : 73.0
+CarbsRemainingGrams     : 63.6
+CarbohydrateGoalGrams   : 200
+FatGrams                : 58.6
+FatRemainingGrams       : 11.4
+FatGoalGrams            : 70
+FiberGrams              : 34.0
+SugarsGrams             : 31.0
+AddedSugarsGrams        : 3.0
+SaturatedFatGrams       : 26.5
+TransFatGrams           : 0.0
+CholesterolMg           : 219.5
+WaterG                  : 855.3
+SodiumMg                : 2615.3
+PotassiumMg             : 2039.5
+CalciumMg               : 4599.7
+IronMg                  : 69.4
+MagnesiumMg             : 565.0
+VitaminC_mg             : 315.0
+VitaminD_IU             : 4235.7
+B12_Cobalamin_ug        : 1.8
+Nutrients               : { 38 entries }
+Alerts                  : { Calories below goal: 1625 kcal consumed / 2200 kcal goal (575 kcal remaining) }
+QueryStatus             : Parsed
+ExtractionMethod        : DOM
+```
+
+---
+
 ## Logs
 
 All activity is written to a CMTrace-compatible log file at `.\logs\CronometerMonitor.log` by default. The log can be opened in CMTrace or the Configuration Manager log viewer for real-time viewing. Each entry includes timestamp, severity (Info / Warning / Error), thread ID, and execution context.
 
-The raw API response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run, or whenever `-ForceRawDump` is used. This file is useful for inspecting the actual response schema if the parsed output shows `QueryStatus: SchemaNeedsRefinement`.
+The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients }` object extracted from the page and is useful for verifying what the script read from the browser.
 
 ---
 
-## Pending Configuration
+## Important: Diary Date Selection
 
-The GraphQL endpoint URL and query fields in `Get-NutritionDataViaNetwork` are placeholders. The script will run but will return `QueryStatus: SchemaNeedsRefinement` until these are updated with values captured from a live browser session.
+The script reads whatever date is currently displayed in the Cronometer browser window. It does not navigate to a date on your behalf. To extract a specific date, navigate to it in Chrome before running the script.
 
-### How to capture the real API call
-
-1. Launch Chrome with remote debugging (Option A or B above).
-2. Log into Cronometer and navigate to the diary.
-3. Open DevTools with `F12` and go to the Network tab.
-4. Filter by Fetch/XHR.
-5. Click any diary date to trigger a data load.
-6. Find the POST request to the diary endpoint. It will have a JSON body.
-7. Copy the full request URL.
-8. Copy the request body (contains `operationName`, `variables`, and `query`).
-9. Click the Response tab and copy the full JSON response body.
-
-### What to update in the script
-
-In `Get-NutritionDataViaNetwork`:
-
-```powershell
-# Replace with the real endpoint URL
-$graphqlEndpoint = 'https://cronometer.com/graphql'
-
-# Replace with the real operation name, variables, and query string
-$graphqlQuery = @'
-{
-  "operationName": "YourRealOperationName",
-  "variables": { "date": "PLACEHOLDER_DATE" },
-  "query": "your real query string here"
-}
-'@
-```
-
-In `ConvertFrom-NutritionResponse`:
-
-```powershell
-# Replace with the real JSON property path from the captured response
-$totals = $parsed.data.diary.totals
-```
-
-After updating, run with `-ForceRawDump` to confirm real data is returned and the output object populates correctly.
+The nutrition summary panels must be visible and fully loaded in the browser for the extraction to return data. If `QueryStatus` is `NoDataFound`, scroll down to the nutrition summary section in Cronometer and run the script again.
 
 ---
 
@@ -247,11 +268,11 @@ Cronometer-Monitor\
     Invoke-CronometerMonitor.ps1    Main script
     CHANGELOG.md                    Version history and change log
     PLAN.md                         Architecture and build plan
-    ANALYSIS.md                     Original analysis of the project
+    ANALYSIS.md                     Original project analysis
     README.md                       This file
     logs\
-        CronometerMonitor.log       CMTrace-formatted activity log
-        CronometerDiaryRawResponse.json   Raw API response for schema inspection
+        CronometerMonitor.log               CMTrace-formatted activity log
+        CronometerDiaryRawResponse.json     Raw DOM response for inspection
 ```
 
 ---

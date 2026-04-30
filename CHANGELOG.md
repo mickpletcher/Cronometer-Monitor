@@ -8,7 +8,42 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 
 ## [Unreleased]
 
-Changes staged but not yet assigned a version.
+No changes pending.
+
+---
+
+## [0.3.0] - 2026-04-30
+
+### Changed
+
+- `Get-NutritionDataViaDOM` is now the sole extraction method. The GWT-RPC network injection approach (`Get-NutritionDataViaNetwork`) was removed after DevTools analysis confirmed Cronometer uses a proprietary GWT-RPC serialization format with no single endpoint that returns pre-summed daily nutrition totals. Totals are calculated client-side by the browser; the DOM scrape reads the already-rendered values.
+- `ConvertFrom-NutritionResponse` fully rewritten to parse the new DOM extraction format: `{ date, nutrients: { name: { value, unit } } }`. Now extracts 34 individual named nutrient fields plus a full `Nutrients` array.
+- `Start-CronometerMonitor` simplified to call `Get-NutritionDataViaDOM` directly with no fallback chain.
+- Output object `Date` field renamed to `DiaryDate` and now reflects the date string displayed in the Cronometer UI (e.g. "Apr 28") rather than the `-Date` parameter value.
+- `ExtractionMethod` on the output object is now always `DOM`.
+
+### Added
+
+- Named output fields for all tracked nutrients: `NetCarbsGrams`, `SugarsGrams`, `AddedSugarsGrams`, `SaturatedFatGrams`, `TransFatGrams`, `CholesterolMg`, `WaterG`, `CalciumMg`, `IronMg`, `MagnesiumMg`, `PhosphorusMg`, `ZincMg`, `CopperMg`, `ManganeseMg`, `SeleniumUg`, `VitaminA_ug`, `VitaminC_mg`, `VitaminD_IU`, `VitaminE_mg`, `VitaminK_ug`, `B1_Thiamine_mg`, `B2_Riboflavin_mg`, `B3_Niacin_mg`, `B5_PantothenicAcid_mg`, `B6_Pyridoxine_mg`, `B12_Cobalamin_ug`, `Folate_ug`.
+- `Get-NVal` helper inside `ConvertFrom-NutritionResponse` for safe nutrient property lookup.
+- DOM selectors confirmed from live page analysis: `.diary-date-btn` for the displayed date, `table.targets-table` for all six nutrient panels, `.nutrient-name` for labels, `.targets-table-number .gwt-HTML` for values, `td:nth-child(3) .gwt-Label` for units.
+
+### Removed
+
+- `Get-NutritionDataViaNetwork` — GWT-RPC injection approach removed. Cronometer's API uses Java GWT-RPC serialization (`getDayInfo`, `getAllFood`, `getDailyMacroTargetTemplate`) with no direct nutrition totals endpoint.
+- `-Date` parameter removed from `ConvertFrom-NutritionResponse`. Date is now read from the live DOM.
+
+---
+
+## [0.2.1] - 2026-04-29
+
+### Added
+
+- `Clear-ChromeSessionRestore` — edits the Chrome `Default\Preferences` file before launch to set `exit_type` to `Normal` and `exited_cleanly` to `true`, preventing the session restore prompt when Chrome is killed and relaunched.
+
+### Changed
+
+- `Connect-ChromeForDebugging` now kills any running Chrome processes before relaunching and calls `Clear-ChromeSessionRestore` between the kill and the launch so Chrome starts clean without the restore dialog.
 
 ---
 

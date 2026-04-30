@@ -173,10 +173,51 @@ function Write-CMTraceLog {
     }
 }
 
+function Clear-ChromeSessionRestore {
+    <#
+    .SYNOPSIS
+    Marks the Chrome profile as having exited cleanly so the restore prompt does not appear on next launch.
+    Must be called after Chrome is fully stopped and before it is relaunched.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$UserDataDir,
+
+        [Parameter(Mandatory)]
+        [string]$LogPath
+    )
+
+    $prefsPath = Join-Path -Path $UserDataDir -ChildPath 'Default\Preferences'
+
+    if (-not (Test-Path -LiteralPath $prefsPath)) {
+        Write-CMTraceLog -Message ("Chrome Preferences file not found at '{0}'. Skipping restore clear." -f $prefsPath) -Level Warning -Path $LogPath
+        return
+    }
+
+    try {
+        $prefs = Get-Content -LiteralPath $prefsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+        if (-not $prefs.profile) {
+            $prefs | Add-Member -MemberType NoteProperty -Name 'profile' -Value ([pscustomobject]@{})
+        }
+
+        $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exit_type'      -Value 'Normal'  -Force
+        $prefs.profile | Add-Member -MemberType NoteProperty -Name 'exited_cleanly' -Value $true     -Force
+
+        $prefs | ConvertTo-Json -Depth 100 -Compress | Set-Content -LiteralPath $prefsPath -Encoding UTF8
+        Write-CMTraceLog -Message ("Cleared Chrome session restore flag in '{0}'." -f $prefsPath) -Path $LogPath
+    }
+    catch {
+        Write-CMTraceLog -Message ("Failed to clear Chrome session restore flag. {0}" -f $_.Exception.Message) -Level Warning -Path $LogPath
+    }
+}
+
 function Connect-ChromeForDebugging {
     <#
     .SYNOPSIS
-    Launches Chrome with remote debugging enabled against the user's real profile.
+    Kills any running Chrome processes, clears the session restore flag, then relaunches
+    Chrome with remote debugging enabled against the user's real profile.
     Only call this if Chrome is not already running with --remote-debugging-port.
     #>
     [CmdletBinding()]
@@ -198,15 +239,25 @@ function Connect-ChromeForDebugging {
         throw "Chrome executable not found at '$ChromePath'. Set -ChromePath to the correct location."
     }
 
-    $args = @(
+    $chromeArgs = @(
         "--remote-debugging-port=$Port",
         "--user-data-dir=`"$UserDataDir`"",
         'https://cronometer.com'
     )
 
     try {
+        $running = Get-Process chrome -ErrorAction SilentlyContinue
+        if ($running) {
+            Write-CMTraceLog -Message ("Stopping {0} running Chrome process(es)." -f @($running).Count) -Path $LogPath
+            $running | Stop-Process -Force
+            Start-Sleep -Seconds 2
+            Write-CMTraceLog -Message 'Chrome processes stopped.' -Path $LogPath
+        }
+
+        Clear-ChromeSessionRestore -UserDataDir $UserDataDir -LogPath $LogPath
+
         Write-CMTraceLog -Message ("Launching Chrome with remote debugging on port {0}. User data: '{1}'." -f $Port, $UserDataDir) -Path $LogPath
-        Start-Process -FilePath $ChromePath -ArgumentList $args
+        Start-Process -FilePath $ChromePath -ArgumentList $chromeArgs
         Start-Sleep -Seconds 3
         Write-CMTraceLog -Message 'Chrome launch complete.' -Path $LogPath
     }
@@ -337,112 +388,13 @@ function Invoke-ChromeDevToolsCommand {
     }
 }
 
-function Get-NutritionDataViaNetwork {
-    <#
-    .SYNOPSIS
-    Navigates the Cronometer tab to the correct diary date and intercepts the GraphQL
-    response via CDP Network domain events.
-
-    PLACEHOLDER: The GraphQL operation name, endpoint, and field paths must be updated
-    after capturing a real request in Chrome DevTools Network tab.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$WebSocketDebuggerUrl,
-
-        [Parameter(Mandatory)]
-        [datetime]$Date,
-
-        [Parameter(Mandatory)]
-        [string]$LogPath,
-
-        [Parameter()]
-        [int]$TimeoutSeconds = 20
-    )
-
-    # PLACEHOLDER: Replace with the real GraphQL endpoint URL once captured from DevTools.
-    $graphqlEndpoint = 'https://cronometer.com/graphql'
-
-    # PLACEHOLDER: Replace with the real GraphQL operation name and fields.
-    # Capture this from DevTools > Network > Fetch/XHR while navigating the diary.
-    $graphqlQuery = @'
-{
-  "operationName": "PLACEHOLDER_OPERATION_NAME",
-  "variables": {
-    "date": "PLACEHOLDER_DATE"
-  },
-  "query": "PLACEHOLDER_QUERY_STRING"
-}
-'@
-
-    # NOTE: This function requires a two-step CDP approach:
-    # 1. Enable Network domain to intercept responses.
-    # 2. Execute the GraphQL fetch from within the page context using Runtime.evaluate.
-    # This avoids needing a WebSocket event loop for network events.
-
-    $dateString = $Date.ToString('yyyy-MM-dd')
-    $escapedQuery = $graphqlQuery.Replace('PLACEHOLDER_DATE', $dateString)
-
-    # Inject a fetch call from within the page — it inherits the page's auth cookies.
-    $fetchScript = @"
-(async () => {
-    const body = $escapedQuery;
-    const response = await fetch('$graphqlEndpoint', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify(body),
-        credentials: 'include'
-    });
-    return await response.text();
-})();
-"@
-
-    try {
-        Write-CMTraceLog -Message ("Injecting diary fetch into page for date {0}." -f $dateString) -Path $LogPath
-
-        $cdpParams = @{
-            expression            = $fetchScript
-            awaitPromise          = $true
-            returnByValue         = $true
-            timeout               = ($TimeoutSeconds * 1000)
-        }
-
-        $response = Invoke-ChromeDevToolsCommand `
-            -WebSocketDebuggerUrl $WebSocketDebuggerUrl `
-            -Method 'Runtime.evaluate' `
-            -Params $cdpParams `
-            -LogPath $LogPath `
-            -TimeoutSeconds ($TimeoutSeconds + 5)
-
-        if ($response.result.result.type -eq 'string') {
-            Write-CMTraceLog -Message 'Diary fetch returned a string response.' -Path $LogPath
-            return $response.result.result.value
-        }
-
-        if ($response.result.exceptionDetails) {
-            $exMsg = $response.result.exceptionDetails.exception.description
-            throw ("Page-side fetch threw an exception: {0}" -f $exMsg)
-        }
-
-        throw 'Unexpected CDP Runtime.evaluate response structure.'
-    }
-    catch {
-        Write-CMTraceLog -Message ("Network extraction failed. {0}" -f $_.Exception.Message) -Level Error -Path $LogPath
-        throw
-    }
-}
-
 function Get-NutritionDataViaDOM {
     <#
     .SYNOPSIS
-    Fallback extraction path. Reads rendered nutrition values from the DOM using
-    Runtime.evaluate and document.querySelector calls.
-
-    PLACEHOLDER: Selectors must be confirmed from the live Cronometer UI.
+    Reads the rendered nutrition totals from the Cronometer diary page using CDP Runtime.evaluate.
+    Scrapes all six targets-table panels (General, B-Vitamins, Vitamins, Minerals, etc.),
+    deduplicates by nutrient name, and returns a JSON object with the diary date and all
+    nutrient values.
     #>
     [CmdletBinding()]
     param(
@@ -453,28 +405,36 @@ function Get-NutritionDataViaDOM {
         [string]$LogPath
     )
 
-    # PLACEHOLDER: Update selectors after inspecting the live Cronometer page.
     $domScript = @'
 (() => {
-    const getText = (selector) => {
-        const el = document.querySelector(selector);
-        return el ? el.innerText.trim() : null;
-    };
+    var dateEl = document.querySelector('.diary-date-btn');
+    var date   = dateEl ? dateEl.innerText.trim() : 'Unknown';
 
-    return JSON.stringify({
-        calories:      getText('PLACEHOLDER_CALORIES_SELECTOR'),
-        protein:       getText('PLACEHOLDER_PROTEIN_SELECTOR'),
-        carbohydrates: getText('PLACEHOLDER_CARBS_SELECTOR'),
-        fat:           getText('PLACEHOLDER_FAT_SELECTOR'),
-        fiber:         getText('PLACEHOLDER_FIBER_SELECTOR'),
-        sodium:        getText('PLACEHOLDER_SODIUM_SELECTOR'),
-        potassium:     getText('PLACEHOLDER_POTASSIUM_SELECTOR')
+    var nutrients = {};
+    var tables = document.querySelectorAll('table.targets-table');
+    tables.forEach(function(table) {
+        var rows = table.querySelectorAll('tr:not(.table-header)');
+        rows.forEach(function(row) {
+            var nameEl = row.querySelector('.nutrient-name');
+            var valEl  = row.querySelector('.targets-table-number .gwt-HTML');
+            var unitEl = row.querySelector('td:nth-child(3) .gwt-Label');
+            if (nameEl && valEl) {
+                var name  = nameEl.innerText.replace(/[ \s]+/g, ' ').trim();
+                var value = valEl.innerText.trim();
+                var unit  = unitEl ? unitEl.innerText.trim() : '';
+                if (name && value !== '-' && !nutrients[name]) {
+                    nutrients[name] = { value: value, unit: unit };
+                }
+            }
+        });
     });
+
+    return JSON.stringify({ date: date, nutrients: nutrients });
 })();
 '@
 
     try {
-        Write-CMTraceLog -Message 'Attempting DOM fallback extraction.' -Path $LogPath
+        Write-CMTraceLog -Message 'Extracting nutrition data from Cronometer DOM.' -Path $LogPath
 
         $cdpParams = @{
             expression    = $domScript
@@ -487,34 +447,34 @@ function Get-NutritionDataViaDOM {
             -Params $cdpParams `
             -LogPath $LogPath
 
+        if ($response.result.exceptionDetails) {
+            throw ("Page-side script threw an exception: {0}" -f $response.result.exceptionDetails.exception.description)
+        }
+
         if ($response.result.result.type -eq 'string') {
-            Write-CMTraceLog -Message 'DOM extraction returned a string response.' -Path $LogPath
+            Write-CMTraceLog -Message 'DOM extraction succeeded.' -Path $LogPath
             return $response.result.result.value
         }
 
         throw 'DOM extraction returned an unexpected response type.'
     }
     catch {
-        Write-CMTraceLog -Message ("DOM fallback extraction failed. {0}" -f $_.Exception.Message) -Level Error -Path $LogPath
+        Write-CMTraceLog -Message ("DOM extraction failed. {0}" -f $_.Exception.Message) -Level Error -Path $LogPath
         throw
     }
 }
 
+
 function ConvertFrom-NutritionResponse {
     <#
     .SYNOPSIS
-    Parses the raw JSON diary response into a structured result object and evaluates goals.
-
-    PLACEHOLDER: Field paths within the JSON must be updated after confirming the real
-    API response schema.
+    Parses the DOM-extracted JSON into a structured result object and evaluates goals.
+    Input JSON shape: { date: "Apr 28", nutrients: { "Energy": { value: "1625.3", unit: "kcal" }, ... } }
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$RawJson,
-
-        [Parameter(Mandatory)]
-        [datetime]$Date,
 
         [Parameter(Mandatory)]
         [double]$CalorieGoal,
@@ -532,83 +492,134 @@ function ConvertFrom-NutritionResponse {
         [string]$LogPath
     )
 
-    function safe ([object]$val, [double]$default = 0) {
-        if ($null -eq $val) { return $default }
-        try { return [double]$val } catch { return $default }
+    function Get-NVal {
+        param([object]$Nutrients, [string]$Name)
+        $prop = $Nutrients.PSObject.Properties[$Name]
+        if (-not $prop) { return 0.0 }
+        try { return [double]$prop.Value.value } catch { return 0.0 }
     }
 
     try {
-        $parsed = $RawJson | ConvertFrom-Json
+        $parsed    = $RawJson | ConvertFrom-Json
+        $diaryDate = $parsed.date
+        $n         = $parsed.nutrients
 
-        # PLACEHOLDER: Update these property paths to match the real response schema.
-        # After a successful fetch, inspect RawResponsePath to find the correct paths.
-        $totals = $parsed.data.diary.totals
+        if (-not $n -or $n.PSObject.Properties.Count -eq 0) {
+            Write-CMTraceLog -Message 'No nutrients found in DOM response. Ensure the Cronometer diary page is open and the nutrition summary panel is visible.' -Level Warning -Path $LogPath
+        }
 
-        $calories      = safe $totals.calories
-        $protein       = safe $totals.protein
-        $carbohydrates = safe $totals.carbohydrates
-        $fat           = safe $totals.fat
-        $fiber         = safe $totals.fiber
-        $sodium        = safe $totals.sodium
-        $potassium     = safe $totals.potassium
+        $calories      = Get-NVal $n 'Energy'
+        $protein       = Get-NVal $n 'Protein'
+        $carbs         = Get-NVal $n 'Carbs'
+        $netCarbs      = Get-NVal $n 'Net Carbs'
+        $fat           = Get-NVal $n 'Fat'
+        $fiber         = Get-NVal $n 'Fiber'
+        $sugars        = Get-NVal $n 'Sugars'
+        $addedSugars   = Get-NVal $n 'Added Sugars'
+        $saturatedFat  = Get-NVal $n 'Saturated'
+        $transFat      = Get-NVal $n 'Trans-Fats'
+        $cholesterol   = Get-NVal $n 'Cholesterol'
+        $sodium        = Get-NVal $n 'Sodium'
+        $potassium     = Get-NVal $n 'Potassium'
+        $water         = Get-NVal $n 'Water'
+        $calcium       = Get-NVal $n 'Calcium'
+        $iron          = Get-NVal $n 'Iron'
+        $magnesium     = Get-NVal $n 'Magnesium'
+        $phosphorus    = Get-NVal $n 'Phosphorus'
+        $zinc          = Get-NVal $n 'Zinc'
+        $copper        = Get-NVal $n 'Copper'
+        $manganese     = Get-NVal $n 'Manganese'
+        $selenium      = Get-NVal $n 'Selenium'
+        $vitA          = Get-NVal $n 'Vitamin A'
+        $vitC          = Get-NVal $n 'Vitamin C'
+        $vitD          = Get-NVal $n 'Vitamin D'
+        $vitE          = Get-NVal $n 'Vitamin E'
+        $vitK          = Get-NVal $n 'Vitamin K'
+        $vitB1         = Get-NVal $n 'B1 (Thiamine)'
+        $vitB2         = Get-NVal $n 'B2 (Riboflavin)'
+        $vitB3         = Get-NVal $n 'B3 (Niacin)'
+        $vitB5         = Get-NVal $n 'B5 (Pantothenic Acid)'
+        $vitB6         = Get-NVal $n 'B6 (Pyridoxine)'
+        $vitB12        = Get-NVal $n 'B12 (Cobalamin)'
+        $folate        = Get-NVal $n 'Folate'
 
-        $caloriesRemaining      = [Math]::Max(0, $CalorieGoal - $calories)
-        $proteinRemaining       = [Math]::Max(0, $ProteinGoalGrams - $protein)
-        $carbohydratesRemaining = [Math]::Max(0, $CarbohydrateGoalGrams - $carbohydrates)
-        $fatRemaining           = [Math]::Max(0, $FatGoalGrams - $fat)
+        $caloriesRemaining = [Math]::Max(0, $CalorieGoal - $calories)
+        $proteinRemaining  = [Math]::Max(0, $ProteinGoalGrams - $protein)
+        $carbsRemaining    = [Math]::Max(0, $CarbohydrateGoalGrams - $carbs)
+        $fatRemaining      = [Math]::Max(0, $FatGoalGrams - $fat)
 
         $alerts = [System.Collections.Generic.List[string]]::new()
+        if ($calories -lt $CalorieGoal) {
+            $alerts.Add(("Calories below goal: {0:F0} kcal consumed / {1} kcal goal ({2:F0} kcal remaining)" -f $calories, $CalorieGoal, $caloriesRemaining))
+        }
         if ($protein -lt $ProteinGoalGrams) {
             $alerts.Add(("Protein below goal: {0:F1}g consumed / {1}g goal ({2:F1}g remaining)" -f $protein, $ProteinGoalGrams, $proteinRemaining))
         }
-        if ($calories -lt $CalorieGoal) {
-            $alerts.Add(("Calories below goal: {0:F0} consumed / {1} goal ({2:F0} remaining)" -f $calories, $CalorieGoal, $caloriesRemaining))
-        }
-        if ($carbohydrates -lt $CarbohydrateGoalGrams) {
-            $alerts.Add(("Carbs below goal: {0:F1}g consumed / {1}g goal ({2:F1}g remaining)" -f $carbohydrates, $CarbohydrateGoalGrams, $carbohydratesRemaining))
+        if ($carbs -lt $CarbohydrateGoalGrams) {
+            $alerts.Add(("Carbs below goal: {0:F1}g consumed / {1}g goal ({2:F1}g remaining)" -f $carbs, $CarbohydrateGoalGrams, $carbsRemaining))
         }
         if ($fat -lt $FatGoalGrams) {
             $alerts.Add(("Fat below goal: {0:F1}g consumed / {1}g goal ({2:F1}g remaining)" -f $fat, $FatGoalGrams, $fatRemaining))
         }
 
-        $nutrients = @()
-        if ($totals -and $totals.nutrients) {
-            $nutrients = @($totals.nutrients | ForEach-Object {
+        $allNutrients = @(
+            $n.PSObject.Properties | ForEach-Object {
                 [pscustomobject]@{
-                    Name  = $_.name
-                    Unit  = $_.unit
-                    Value = safe $_.value
+                    Name  = $_.Name
+                    Value = $_.Value.value
+                    Unit  = $_.Value.unit
                 }
-            })
-        }
-
-        $schemaStatus = if ($totals) { 'Parsed' } else { 'SchemaNeedsRefinement' }
-
-        if (-not $totals) {
-            Write-CMTraceLog -Message 'Response parsed but diary totals path (data.diary.totals) was not found. Schema placeholder is still active.' -Level Warning -Path $LogPath
-        }
+            }
+        )
 
         return [pscustomobject]@{
-            Date                    = $Date.ToString('yyyy-MM-dd')
+            DiaryDate               = $diaryDate
             CaloriesConsumed        = $calories
             CaloriesRemaining       = $caloriesRemaining
             CalorieGoal             = $CalorieGoal
             ProteinGrams            = $protein
             ProteinRemainingGrams   = $proteinRemaining
             ProteinGoalGrams        = $ProteinGoalGrams
-            CarbohydratesGrams      = $carbohydrates
-            CarbohydratesRemaining  = $carbohydratesRemaining
+            CarbsGrams              = $carbs
+            NetCarbsGrams           = $netCarbs
+            CarbsRemainingGrams     = $carbsRemaining
             CarbohydrateGoalGrams   = $CarbohydrateGoalGrams
             FatGrams                = $fat
             FatRemainingGrams       = $fatRemaining
             FatGoalGrams            = $FatGoalGrams
             FiberGrams              = $fiber
+            SugarsGrams             = $sugars
+            AddedSugarsGrams        = $addedSugars
+            SaturatedFatGrams       = $saturatedFat
+            TransFatGrams           = $transFat
+            CholesterolMg           = $cholesterol
             SodiumMg                = $sodium
             PotassiumMg             = $potassium
-            Nutrients               = $nutrients
+            WaterG                  = $water
+            CalciumMg               = $calcium
+            IronMg                  = $iron
+            MagnesiumMg             = $magnesium
+            PhosphorusMg            = $phosphorus
+            ZincMg                  = $zinc
+            CopperMg                = $copper
+            ManganeseMg             = $manganese
+            SeleniumUg              = $selenium
+            VitaminA_ug             = $vitA
+            VitaminC_mg             = $vitC
+            VitaminD_IU             = $vitD
+            VitaminE_mg             = $vitE
+            VitaminK_ug             = $vitK
+            B1_Thiamine_mg          = $vitB1
+            B2_Riboflavin_mg        = $vitB2
+            B3_Niacin_mg            = $vitB3
+            B5_PantothenicAcid_mg   = $vitB5
+            B6_Pyridoxine_mg        = $vitB6
+            B12_Cobalamin_ug        = $vitB12
+            Folate_ug               = $folate
+            Nutrients               = $allNutrients
             Alerts                  = @($alerts)
-            QueryStatus             = $schemaStatus
-            ExtractionMethod        = 'Network'
+            QueryStatus             = if ($n.PSObject.Properties.Count -gt 0) { 'Parsed' } else { 'NoDataFound' }
+            ExtractionMethod        = 'DOM'
         }
     }
     catch {
@@ -692,43 +703,31 @@ function Start-CronometerMonitor {
         [double]$FatGoalGrams
     )
 
-    Write-CMTraceLog -Message ("Cronometer monitor run started for date {0}." -f $Date.ToString('yyyy-MM-dd')) -Path $LogPath
+    Write-CMTraceLog -Message 'Cronometer monitor run started.' -Path $LogPath
 
     if ($ShouldLaunchChrome) {
         Connect-ChromeForDebugging -ChromePath $ChromePath -UserDataDir $UserDataDir -Port $Port -LogPath $LogPath
     }
 
-    $tabs = Get-ChromeDebugEndpoint -Port $Port -LogPath $LogPath
-    $tab  = Get-CronometerTab -Tabs $tabs -LogPath $LogPath
-
+    $tabs  = Get-ChromeDebugEndpoint -Port $Port -LogPath $LogPath
+    $tab   = Get-CronometerTab -Tabs $tabs -LogPath $LogPath
     $wsUrl = $tab.webSocketDebuggerUrl
     Write-CMTraceLog -Message ("Attaching to tab via WebSocket: '{0}'." -f $wsUrl) -Path $LogPath
 
-    $rawJson = $null
-
-    try {
-        $rawJson = Get-NutritionDataViaNetwork -WebSocketDebuggerUrl $wsUrl -Date $Date -LogPath $LogPath
-        Write-CMTraceLog -Message 'Network extraction succeeded.' -Path $LogPath
-    }
-    catch {
-        Write-CMTraceLog -Message ("Network extraction failed, falling back to DOM. {0}" -f $_.Exception.Message) -Level Warning -Path $LogPath
-        $rawJson = Get-NutritionDataViaDOM -WebSocketDebuggerUrl $wsUrl -LogPath $LogPath
-        Write-CMTraceLog -Message 'DOM extraction succeeded.' -Path $LogPath
-    }
+    $rawJson = Get-NutritionDataViaDOM -WebSocketDebuggerUrl $wsUrl -LogPath $LogPath
 
     Save-RawResponse -Content $rawJson -Path $RawResponsePath -Force:$ForceRawDump -LogPath $LogPath
 
     $result = ConvertFrom-NutritionResponse `
-        -RawJson $rawJson `
-        -Date $Date `
-        -CalorieGoal $CalorieGoal `
-        -ProteinGoalGrams $ProteinGoalGrams `
+        -RawJson               $rawJson `
+        -CalorieGoal           $CalorieGoal `
+        -ProteinGoalGrams      $ProteinGoalGrams `
         -CarbohydrateGoalGrams $CarbohydrateGoalGrams `
-        -FatGoalGrams $FatGoalGrams `
-        -LogPath $LogPath
+        -FatGoalGrams          $FatGoalGrams `
+        -LogPath               $LogPath
 
-    Write-CMTraceLog -Message ("Monitor run complete. Status: {0}. Calories: {1}/{2}. Protein: {3}g/{4}g." -f `
-        $result.QueryStatus, $result.CaloriesConsumed, $result.CalorieGoal, `
+    Write-CMTraceLog -Message ("Monitor run complete. Status: {0}. Date: {1}. Calories: {2:F0}/{3}. Protein: {4:F1}g/{5}g." -f `
+        $result.QueryStatus, $result.DiaryDate, $result.CaloriesConsumed, $result.CalorieGoal, `
         $result.ProteinGrams, $result.ProteinGoalGrams) -Path $LogPath
 
     return $result
