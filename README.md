@@ -126,6 +126,17 @@ $nutrition.Alerts
 $nutrition | ConvertTo-Json -Depth 5
 ```
 
+### Open the local dashboard
+
+Run the extractor first so the result JSON exists, then start the local web dashboard:
+
+```powershell
+.\Invoke-CronometerMonitor.ps1
+.\Start-CronometerDashboard.ps1
+```
+
+This opens `http://localhost:8876/dashboard/` and loads `logs\CronometerMonitorResult.json` by default. You can also load any other JSON file from disk, including a richer payload written later by n8n.
+
 ---
 
 ## Parameters

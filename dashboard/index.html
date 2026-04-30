@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cronometer Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Cronometer Monitor</p>
+                <h1>Daily Nutrition Dashboard</h1>
+                <p class="hero-copy">Reads the generated monitor JSON now and leaves room for deeper n8n diet analysis later.</p>
+            </div>
+            <div class="hero-actions">
+                <label class="button secondary" for="fileInput">Open JSON</label>
+                <input id="fileInput" type="file" accept=".json,application/json">
+                <button id="reloadDefaultButton" class="button" type="button">Reload Default File</button>
+            </div>
+        </header>
+
+        <main id="app" class="layout">
+            <section class="panel status-panel">
+                <div>
+                    <p class="section-label">Source</p>
+                    <h2 id="sourceLabel">Waiting for data</h2>
+                    <p id="statusText" class="muted">Load a JSON file or run the local dashboard server.</p>
+                </div>
+                <div class="drop-zone" id="dropZone">
+                    <p>Drop a JSON file here</p>
+                    <p class="muted">This works well for n8n enriched output.</p>
+                </div>
+            </section>
+
+            <section class="metrics-grid" id="heroMetrics"></section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-label">Macros</p>
+                        <h2>Goal tracking</h2>
+                    </div>
+                </div>
+                <div id="macroCards" class="macro-grid"></div>
+            </section>
+
+            <section class="two-column">
+                <section class="panel">
+                    <div class="section-heading">
+                        <div>
+                            <p class="section-label">Signals</p>
+                            <h2>Alerts</h2>
+                        </div>
+                    </div>
+                    <div id="alertsList" class="stack-list"></div>
+                </section>
+
+                <section class="panel">
+                    <div class="section-heading">
+                        <div>
+                            <p class="section-label">Metadata</p>
+                            <h2>Extraction status</h2>
+                        </div>
+                    </div>
+                    <dl id="statusDetails" class="detail-list"></dl>
+                </section>
+            </section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-label">Nutrients</p>
+                        <h2>Detailed values</h2>
+                    </div>
+                    <label class="search-shell">
+                        <span>Filter</span>
+                        <input id="nutrientSearch" type="search" placeholder="Name or unit">
+                    </label>
+                </div>
+                <div class="table-shell">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Value</th>
+                                <th>Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nutrientTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-label">Future Data</p>
+                        <h2>n8n enriched sections</h2>
+                    </div>
+                </div>
+                <div id="futureSections" class="future-grid"></div>
+            </section>
+        </main>
+    </div>
+
+    <template id="emptyStateTemplate">
+        <div class="empty-state">
+            <p>No items to show.</p>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>
