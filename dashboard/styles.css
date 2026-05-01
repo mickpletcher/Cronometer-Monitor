@@ -329,6 +329,119 @@ thead {
     text-align: center;
 }
 
+.days-toggle {
+    display: flex;
+    gap: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+    background: rgba(29, 26, 23, 0.04);
+}
+
+.toggle-btn {
+    border: 0;
+    background: transparent;
+    padding: 5px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.88rem;
+    font: inherit;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+.toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.history-chart-shell {
+    margin: 8px 0 12px;
+    min-height: 40px;
+}
+
+.chart-empty {
+    padding: 24px 0;
+    text-align: center;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.recommendation-cell {
+    font-size: 0.85rem;
+    color: var(--muted);
+    max-width: 280px;
+    line-height: 1.4;
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+.section-controls {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+    flex-wrap: wrap;
+    justify-content: end;
+}
+
+.select-shell {
+    display: grid;
+    gap: 6px;
+    color: var(--muted);
+}
+
+.select-shell select {
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 10px 14px;
+    cursor: pointer;
+    font: inherit;
+    color: var(--ink);
+    appearance: auto;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.status-ok {
+    background: rgba(43, 122, 75, 0.12);
+    color: var(--good);
+}
+
+.status-low {
+    background: rgba(139, 47, 47, 0.12);
+    color: var(--bad);
+}
+
+.status-high {
+    background: rgba(156, 93, 9, 0.12);
+    color: var(--warn);
+}
+
 @media (max-width: 1080px) {
     .metrics-grid,
     .macro-grid,

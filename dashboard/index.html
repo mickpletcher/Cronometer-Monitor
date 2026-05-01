@@ -71,13 +71,42 @@
             <section class="panel">
                 <div class="section-heading">
                     <div>
+                        <p class="section-label">History</p>
+                        <h2>Trends</h2>
+                    </div>
+                    <div class="days-toggle">
+                        <button class="toggle-btn active" data-days="7">7d</button>
+                        <button class="toggle-btn" data-days="14">14d</button>
+                        <button class="toggle-btn" data-days="30">30d</button>
+                    </div>
+                </div>
+                <div id="historyChart" class="history-chart-shell"></div>
+                <div class="chart-legend">
+                    <span class="legend-dot" style="background:#b45227"></span><span>Calories % of goal</span>
+                    <span class="legend-dot" style="background:#2b7a4b"></span><span>Protein % of goal</span>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
                         <p class="section-label">Nutrients</p>
                         <h2>Detailed values</h2>
                     </div>
-                    <label class="search-shell">
-                        <span>Filter</span>
-                        <input id="nutrientSearch" type="search" placeholder="Name or unit">
-                    </label>
+                    <div class="section-controls">
+                        <label class="select-shell">
+                            <span>Targets</span>
+                            <select id="targetModeSelect">
+                                <option value="standard">Standard (FDA)</option>
+                                <option value="bariatric">Bariatric</option>
+                                <option value="keto">Keto</option>
+                            </select>
+                        </label>
+                        <label class="search-shell">
+                            <span>Filter</span>
+                            <input id="nutrientSearch" type="search" placeholder="Name or unit">
+                        </label>
+                    </div>
                 </div>
                 <div class="table-shell">
                     <table>
@@ -86,6 +115,9 @@
                                 <th>Name</th>
                                 <th>Value</th>
                                 <th>Unit</th>
+                                <th>Target</th>
+                                <th>Status</th>
+                                <th>Recommendation</th>
                             </tr>
                         </thead>
                         <tbody id="nutrientTableBody"></tbody>

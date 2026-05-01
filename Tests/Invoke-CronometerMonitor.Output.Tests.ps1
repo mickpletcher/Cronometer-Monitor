@@ -49,4 +49,33 @@ Describe 'ConvertFrom-NutritionResponse output shaping' {
         $result.OutputMetadata.MissingSignals[0] | Should -Be 'NutrientUnitSelector'
         $result.OutputMetadata.MissingSignalsSummary | Should -Be 'NutrientUnitSelector'
     }
+
+    It 'surfaces biometrics and grouped diary entries in the shaped output' {
+        $rawJson = Get-Content -LiteralPath (Join-Path -Path $PSScriptRoot -ChildPath 'fixtures\dom-response-valid-with-diary-and-biometrics.json') -Raw -Encoding UTF8
+        $validation = Test-NutritionExtractionPayload -RawJson $rawJson -LogPath $logPath
+
+        $result = ConvertFrom-NutritionResponse `
+            -RawJson $rawJson `
+            -CalorieGoal 2200 `
+            -ProteinGoalGrams 150 `
+            -CarbohydrateGoalGrams 200 `
+            -FatGoalGrams 70 `
+            -ValidationResult $validation `
+            -AttemptsUsed 1 `
+            -LogPath $logPath
+
+        $result.SchemaVersion | Should -Be '2.1'
+        $result.Biometrics | Should -HaveCount 2
+        $result.Biometrics[1].Name | Should -Be 'Blood Pressure'
+        $result.Biometrics[1].Systolic | Should -Be 136
+        $result.Biometrics[1].Diastolic | Should -Be 87
+        $result.DiaryGroups | Should -HaveCount 2
+        $result.DiaryGroups[0].GroupName | Should -Be 'Breakfast'
+        $result.DiaryGroups[0].Summary.Calories | Should -Be 160
+        $result.DiaryEntries | Should -HaveCount 2
+        $result.DiaryEntries[1].EntryType | Should -Be 'Supplement'
+        $result.OutputMetadata.BiometricCount | Should -Be 2
+        $result.OutputMetadata.DiaryGroupCount | Should -Be 2
+        $result.OutputMetadata.DiaryEntryCount | Should -Be 2
+    }
 }

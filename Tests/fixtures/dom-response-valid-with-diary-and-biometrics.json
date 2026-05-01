@@ -1,0 +1,114 @@
+{
+  "date": "Today",
+  "nutrients": {
+    "Energy": { "value": "685.1", "unit": "kcal" },
+    "Protein": { "value": "84.5", "unit": "g" },
+    "Carbs": { "value": "37.8", "unit": "g" },
+    "Fat": { "value": "21.7", "unit": "g" }
+  },
+  "biometrics": [
+    {
+      "Time": "8:48 AM",
+      "Name": "Heart Rate",
+      "Source": "Withings",
+      "DisplayName": "Heart Rate (Withings)",
+      "Subtitle": "",
+      "Value": "55",
+      "Unit": "bpm"
+    },
+    {
+      "Time": "8:48 AM",
+      "Name": "Blood Pressure",
+      "Source": "Apple Health",
+      "DisplayName": "Blood Pressure (Apple Health)",
+      "Subtitle": "",
+      "Value": "136 / 87",
+      "Unit": "mmHg"
+    }
+  ],
+  "diaryGroups": [
+    {
+      "GroupName": "Breakfast",
+      "SummaryText": "160 kcal • 30 g protein • 2 g carbs • 3 g fat",
+      "Summary": {
+        "calories": "160",
+        "proteinGrams": "30",
+        "carbsGrams": "2",
+        "fatGrams": "3"
+      },
+      "Entries": [
+        {
+          "GroupName": "Breakfast",
+          "EntryType": "Food",
+          "Time": "10:11 AM",
+          "Name": "Member's Mark, High Protein Nutritional Shake, Chocolate",
+          "Quantity": "1",
+          "Serving": "shake (325ml)",
+          "Calories": "160",
+          "CaloriesUnit": "kcal"
+        }
+      ]
+    },
+    {
+      "GroupName": "Supplements/Vitamins",
+      "SummaryText": "135 kcal • 1 g protein • 11 g carbs • 4 g fat",
+      "Summary": {
+        "calories": "135",
+        "proteinGrams": "1",
+        "carbsGrams": "11",
+        "fatGrams": "4"
+      },
+      "Entries": [
+        {
+          "GroupName": "Supplements/Vitamins",
+          "EntryType": "Supplement",
+          "Time": "1:12 AM",
+          "Name": "Member's Mark, Omega 3-6-9",
+          "Quantity": "2",
+          "Serving": "softgels",
+          "Calories": "25",
+          "CaloriesUnit": "kcal"
+        }
+      ]
+    }
+  ],
+  "diaryEntries": [
+    {
+      "GroupName": "Breakfast",
+      "EntryType": "Food",
+      "Time": "10:11 AM",
+      "Name": "Member's Mark, High Protein Nutritional Shake, Chocolate",
+      "Quantity": "1",
+      "Serving": "shake (325ml)",
+      "Calories": "160",
+      "CaloriesUnit": "kcal"
+    },
+    {
+      "GroupName": "Supplements/Vitamins",
+      "EntryType": "Supplement",
+      "Time": "1:12 AM",
+      "Name": "Member's Mark, Omega 3-6-9",
+      "Quantity": "2",
+      "Serving": "softgels",
+      "Calories": "25",
+      "CaloriesUnit": "kcal"
+    }
+  ],
+  "metadata": {
+    "selectorMatches": {
+      "date": ".diary-date-btn",
+      "tables": "table.targets-table",
+      "nutrientName": ".nutrient-name",
+      "nutrientValue": ".targets-table-number .gwt-HTML",
+      "nutrientUnit": "td:nth-child(3) .gwt-Label",
+      "diaryGroup": "tr.diary-group-row",
+      "diaryTime": "td.diary-time"
+    },
+    "tableCount": 6,
+    "nutrientCount": 4,
+    "biometricCount": 2,
+    "diaryGroupCount": 2,
+    "diaryEntryCount": 2,
+    "missingSignals": []
+  }
+}

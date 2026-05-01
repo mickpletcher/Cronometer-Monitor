@@ -98,6 +98,9 @@ param(
     [string]$ResultJsonPath = (Join-Path -Path $PSScriptRoot -ChildPath 'logs\CronometerMonitorResult.json'),
 
     [Parameter()]
+    [string]$HistoryCsvPath = (Join-Path -Path $PSScriptRoot -ChildPath 'logs\CronometerHistory.csv'),
+
+    [Parameter()]
     [switch]$ForceRawDump,
 
     [Parameter()]
@@ -218,6 +221,14 @@ function Get-SelectorRegistry {
             'td:nth-child(3) .gwt-Label',
             'td:nth-child(3) .gwt-HTML',
             'td:nth-child(3)'
+        )
+        diaryGroup = @(
+            'tr.diary-group-row',
+            '.diary-group-row'
+        )
+        diaryTime = @(
+            'td.diary-time',
+            '.diary-time'
         )
     }
 }
@@ -507,6 +518,9 @@ function Get-NutritionDataViaDOM {
         selectorMatches: {},
         tableCount: 0,
         nutrientCount: 0,
+        biometricCount: 0,
+        diaryGroupCount: 0,
+        diaryEntryCount: 0,
         missingSignals: []
     };
 
@@ -544,6 +558,9 @@ function Get-NutritionDataViaDOM {
     }
 
     var nutrients = {};
+    var biometrics = [];
+    var diaryGroups = [];
+    var diaryEntries = [];
     var tableMatch = allMatches(selectorRegistry.tables);
     metadata.selectorMatches.tables = tableMatch.selector;
     var tables = tableMatch.elements;
@@ -599,7 +616,173 @@ function Get-NutritionDataViaDOM {
         metadata.missingSignals.push('NoNutrientsExtracted');
     }
 
-    return JSON.stringify({ date: date, nutrients: nutrients, metadata: metadata });
+    function normalizeText(value) {
+        if (!value) {
+            return '';
+        }
+
+        return value.replace(/[ \s]+/g, ' ').trim();
+    }
+
+    function parseNameAndSource(value) {
+        var text = normalizeText(value);
+        var match = text.match(/^(.*?)(?:\s*\(([^)]+)\))$/);
+        if (match) {
+            return {
+                name: normalizeText(match[1]),
+                source: normalizeText(match[2])
+            };
+        }
+
+        return {
+            name: text,
+            source: ''
+        };
+    }
+
+    function parseMacroSummary(text) {
+        var summaryText = normalizeText(text);
+        var summary = {
+            calories: null,
+            proteinGrams: null,
+            carbsGrams: null,
+            fatGrams: null
+        };
+
+        var caloriesMatch = summaryText.match(/([0-9.]+)\s*kcal/i);
+        var proteinMatch = summaryText.match(/([0-9.]+)\s*g\s*protein/i);
+        var carbsMatch = summaryText.match(/([0-9.]+)\s*g\s*carbs/i);
+        var fatMatch = summaryText.match(/([0-9.]+)\s*g\s*fat/i);
+
+        if (caloriesMatch) {
+            summary.calories = caloriesMatch[1];
+        }
+
+        if (proteinMatch) {
+            summary.proteinGrams = proteinMatch[1];
+        }
+
+        if (carbsMatch) {
+            summary.carbsGrams = carbsMatch[1];
+        }
+
+        if (fatMatch) {
+            summary.fatGrams = fatMatch[1];
+        }
+
+        return summary;
+    }
+
+    function getEntryType(row) {
+        if (row.querySelector('.icon-add-biometric')) {
+            return 'Biometric';
+        }
+
+        if (row.querySelector('.icon-supplement')) {
+            return 'Supplement';
+        }
+
+        if (row.querySelector('.icon-food')) {
+            return 'Food';
+        }
+
+        return 'Unknown';
+    }
+
+    var diaryGroupMatch = allMatches(selectorRegistry.diaryGroup);
+    var diaryTimeMatch = allMatches(selectorRegistry.diaryTime);
+    metadata.selectorMatches.diaryGroup = diaryGroupMatch.selector;
+    metadata.selectorMatches.diaryTime = diaryTimeMatch.selector;
+
+    var allRows = document.querySelectorAll('tr');
+    var currentGroup = null;
+
+    allRows.forEach(function(row) {
+        var groupTitleElement = row.querySelector('.diary-group-title');
+        if (groupTitleElement) {
+            var groupTitle = normalizeText(groupTitleElement.innerText);
+            var groupMacrosElement = row.querySelector('.diary-group-macros');
+            var groupSummaryText = groupMacrosElement ? normalizeText(groupMacrosElement.innerText) : '';
+            currentGroup = {
+                GroupName: groupTitle,
+                SummaryText: groupSummaryText,
+                Summary: parseMacroSummary(groupSummaryText),
+                Entries: []
+            };
+            diaryGroups.push(currentGroup);
+            return;
+        }
+
+        var timeCell = row.querySelector('td.diary-time');
+        if (!timeCell) {
+            return;
+        }
+
+        var cells = row.querySelectorAll('td');
+        if (!cells || cells.length < 5) {
+            return;
+        }
+
+        var entryType = getEntryType(row);
+        var titleCell = cells[2];
+        var timeText = normalizeText(timeCell.innerText);
+        var primaryNameElement = titleCell.querySelector('.name');
+        var subtitleElement = titleCell.querySelector('.name-subtitle');
+        var displayName = primaryNameElement ? normalizeText(primaryNameElement.innerText) : normalizeText(titleCell.innerText);
+        var subtitle = subtitleElement ? normalizeText(subtitleElement.innerText) : '';
+        var parsedName = parseNameAndSource(displayName);
+
+        if (entryType === 'Biometric') {
+            biometrics.push({
+                Time: timeText,
+                Name: parsedName.name,
+                Source: parsedName.source,
+                DisplayName: displayName,
+                Subtitle: subtitle,
+                Value: normalizeText(cells[3] ? cells[3].innerText : ''),
+                Unit: normalizeText(cells[4] ? cells[4].innerText : '')
+            });
+            return;
+        }
+
+        var diaryEntry = {
+            GroupName: currentGroup ? currentGroup.GroupName : '',
+            EntryType: entryType,
+            Time: timeText,
+            Name: displayName,
+            Quantity: normalizeText(cells[3] ? cells[3].innerText : ''),
+            Serving: normalizeText(cells[4] ? cells[4].innerText : ''),
+            Calories: normalizeText(cells[5] ? cells[5].innerText : ''),
+            CaloriesUnit: normalizeText(cells[6] ? cells[6].innerText : '')
+        };
+
+        diaryEntries.push(diaryEntry);
+
+        if (currentGroup) {
+            currentGroup.Entries.push(diaryEntry);
+        }
+    });
+
+    metadata.biometricCount = biometrics.length;
+    metadata.diaryGroupCount = diaryGroups.length;
+    metadata.diaryEntryCount = diaryEntries.length;
+
+    if (!metadata.selectorMatches.diaryGroup) {
+        metadata.missingSignals.push('DiaryGroupSelector');
+    }
+
+    if (!metadata.selectorMatches.diaryTime) {
+        metadata.missingSignals.push('DiaryTimeSelector');
+    }
+
+    return JSON.stringify({
+        date: date,
+        nutrients: nutrients,
+        biometrics: biometrics,
+        diaryGroups: diaryGroups,
+        diaryEntries: diaryEntries,
+        metadata: metadata
+    });
 })();
 "@
 
@@ -721,11 +904,109 @@ function ConvertFrom-NutritionResponse {
         try { return [double]$prop.Value.value } catch { return 0.0 }
     }
 
+    function ConvertTo-OptionalDouble {
+        param([object]$Value)
+
+        if ($null -eq $Value) {
+            return $null
+        }
+
+        $text = [string]$Value
+        if ([string]::IsNullOrWhiteSpace($text)) {
+            return $null
+        }
+
+        try {
+            return [double]$text
+        }
+        catch {
+            return $null
+        }
+    }
+
+    function ConvertTo-BiometricRecord {
+        param([object]$Record)
+
+        $name = [string]$Record.Name
+        $value = [string]$Record.Value
+        $unit = [string]$Record.Unit
+        $numericValue = ConvertTo-OptionalDouble -Value $value
+        $systolic = $null
+        $diastolic = $null
+
+        if ($name -eq 'Blood Pressure' -and $value -match '^\s*(?<Systolic>\d+(?:\.\d+)?)\s*/\s*(?<Diastolic>\d+(?:\.\d+)?)\s*$') {
+            $systolic = ConvertTo-OptionalDouble -Value $Matches.Systolic
+            $diastolic = ConvertTo-OptionalDouble -Value $Matches.Diastolic
+        }
+
+        return [pscustomobject]@{
+            Time          = [string]$Record.Time
+            Name          = $name
+            Source        = [string]$Record.Source
+            DisplayName   = [string]$Record.DisplayName
+            Subtitle      = [string]$Record.Subtitle
+            Value         = $value
+            NumericValue  = $numericValue
+            Unit          = $unit
+            Systolic      = $systolic
+            Diastolic     = $diastolic
+        }
+    }
+
+    function ConvertTo-DiaryEntryRecord {
+        param([object]$Record)
+
+        return [pscustomobject]@{
+            GroupName      = [string]$Record.GroupName
+            EntryType      = [string]$Record.EntryType
+            Time           = [string]$Record.Time
+            Name           = [string]$Record.Name
+            Quantity       = [string]$Record.Quantity
+            Serving        = [string]$Record.Serving
+            Calories       = ConvertTo-OptionalDouble -Value $Record.Calories
+            CaloriesText   = [string]$Record.Calories
+            CaloriesUnit   = [string]$Record.CaloriesUnit
+        }
+    }
+
+    function ConvertTo-DiaryGroupRecord {
+        param([object]$Group)
+
+        $entries = @()
+        if ($Group.PSObject.Properties['Entries']) {
+            $entries = @(
+                $Group.Entries | ForEach-Object {
+                    ConvertTo-DiaryEntryRecord -Record $_
+                }
+            )
+        }
+
+        $summary = $null
+        if ($Group.PSObject.Properties['Summary']) {
+            $summary = [pscustomobject]@{
+                Calories      = ConvertTo-OptionalDouble -Value $Group.Summary.calories
+                ProteinGrams  = ConvertTo-OptionalDouble -Value $Group.Summary.proteinGrams
+                CarbsGrams    = ConvertTo-OptionalDouble -Value $Group.Summary.carbsGrams
+                FatGrams      = ConvertTo-OptionalDouble -Value $Group.Summary.fatGrams
+            }
+        }
+
+        return [pscustomobject]@{
+            GroupName    = [string]$Group.GroupName
+            SummaryText  = [string]$Group.SummaryText
+            Summary      = $summary
+            Entries      = $entries
+        }
+    }
+
     try {
         $parsed    = $RawJson | ConvertFrom-Json
         $diaryDate = $parsed.date
         $n         = $parsed.nutrients
         $metadata  = $parsed.metadata
+        $biometricsRaw = if ($parsed.PSObject.Properties['biometrics']) { @($parsed.biometrics) } else { @() }
+        $diaryGroupsRaw = if ($parsed.PSObject.Properties['diaryGroups']) { @($parsed.diaryGroups) } else { @() }
+        $diaryEntriesRaw = if ($parsed.PSObject.Properties['diaryEntries']) { @($parsed.diaryEntries) } else { @() }
         $nutrientPropertyCount = @($n.PSObject.Properties).Count
 
         if (-not $n -or $nutrientPropertyCount -eq 0) {
@@ -799,12 +1080,40 @@ function ConvertFrom-NutritionResponse {
             )
         }
 
+        $biometrics = @(
+            $biometricsRaw | ForEach-Object {
+                ConvertTo-BiometricRecord -Record $_
+            }
+        )
+
+        $diaryGroups = @(
+            $diaryGroupsRaw | ForEach-Object {
+                ConvertTo-DiaryGroupRecord -Group $_
+            }
+        )
+
+        $diaryEntries = @()
+        if (@($diaryGroups).Count -gt 0) {
+            $diaryEntries = @(
+                $diaryGroups | ForEach-Object { $_.Entries }
+            )
+        }
+        elseif (@($diaryEntriesRaw).Count -gt 0) {
+            $diaryEntries = @(
+                $diaryEntriesRaw | ForEach-Object {
+                    ConvertTo-DiaryEntryRecord -Record $_
+                }
+            )
+        }
+
         $selectorMatches = [pscustomobject]@{
             DateSelector          = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.date } else { '' }
             TablesSelector        = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.tables } else { '' }
             NutrientNameSelector  = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientName } else { '' }
             NutrientValueSelector = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientValue } else { '' }
             NutrientUnitSelector  = if ($metadata -and $metadata.selectorMatches) { [string]$metadata.selectorMatches.nutrientUnit } else { '' }
+            DiaryGroupSelector    = if ($metadata -and $metadata.selectorMatches -and $metadata.selectorMatches.PSObject.Properties['diaryGroup']) { [string]$metadata.selectorMatches.diaryGroup } else { '' }
+            DiaryTimeSelector     = if ($metadata -and $metadata.selectorMatches -and $metadata.selectorMatches.PSObject.Properties['diaryTime']) { [string]$metadata.selectorMatches.diaryTime } else { '' }
         }
 
         $missingSignals = if ($metadata -and $metadata.PSObject.Properties['missingSignals']) { @($metadata.missingSignals) } else { @() }
@@ -816,10 +1125,12 @@ function ConvertFrom-NutritionResponse {
             "Name=$($selectorMatches.NutrientNameSelector)"
             "Value=$($selectorMatches.NutrientValueSelector)"
             "Unit=$($selectorMatches.NutrientUnitSelector)"
+            "DiaryGroup=$($selectorMatches.DiaryGroupSelector)"
+            "DiaryTime=$($selectorMatches.DiaryTimeSelector)"
         ) -join '; '
 
         return [pscustomobject]@{
-            SchemaVersion          = '2.0'
+            SchemaVersion          = '2.1'
             DiaryDate               = $diaryDate
             CaloriesConsumed        = $calories
             CaloriesRemaining       = $caloriesRemaining
@@ -868,6 +1179,9 @@ function ConvertFrom-NutritionResponse {
             RequiredFieldsPresent   = if ($ValidationResult) { $ValidationResult.IsValid } else { $false }
             MissingRequiredFields   = if ($ValidationResult) { @($ValidationResult.MissingRequiredFields) } else { @() }
             MissingRequiredSummary  = if ($ValidationResult -and @($ValidationResult.MissingRequiredFields).Count -gt 0) { @($ValidationResult.MissingRequiredFields) -join ', ' } else { 'None' }
+            Biometrics              = $biometrics
+            DiaryGroups             = $diaryGroups
+            DiaryEntries            = $diaryEntries
             Nutrients               = $allNutrients
             Alerts                  = @($alerts)
             ExtractionMethod        = 'DOM'
@@ -877,13 +1191,18 @@ function ConvertFrom-NutritionResponse {
             NutrientNameSelectorUsed = $selectorMatches.NutrientNameSelector
             NutrientValueSelectorUsed = $selectorMatches.NutrientValueSelector
             NutrientUnitSelectorUsed = $selectorMatches.NutrientUnitSelector
+            DiaryGroupSelectorUsed = $selectorMatches.DiaryGroupSelector
+            DiaryTimeSelectorUsed = $selectorMatches.DiaryTimeSelector
             MissingSignalsSummary   = $missingSignalsSummary
             OutputMetadata          = [pscustomobject]@{
-                SchemaVersion        = '2.0'
+                SchemaVersion        = '2.1'
                 SelectorMatchesSummary = $selectorMatchesSummary
                 SelectorMatches      = $selectorMatches
                 TableCount           = if ($metadata) { [int]$metadata.tableCount } else { 0 }
                 NutrientCount        = if ($metadata) { [int]$metadata.nutrientCount } else { 0 }
+                BiometricCount       = if ($metadata -and $metadata.PSObject.Properties['biometricCount']) { [int]$metadata.biometricCount } else { @($biometrics).Count }
+                DiaryGroupCount      = if ($metadata -and $metadata.PSObject.Properties['diaryGroupCount']) { [int]$metadata.diaryGroupCount } else { @($diaryGroups).Count }
+                DiaryEntryCount      = if ($metadata -and $metadata.PSObject.Properties['diaryEntryCount']) { [int]$metadata.diaryEntryCount } else { @($diaryEntries).Count }
                 MissingSignalsSummary = $missingSignalsSummary
                 MissingSignals       = $missingSignals
             }
@@ -958,6 +1277,83 @@ function Save-ResultJson {
     }
 }
 
+function Save-HistoryCsv {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Result,
+
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [string]$LogPath
+    )
+
+    if ($Result.QueryStatus -ne 'Parsed') {
+        Write-StageLog -Stage 'Persist' -Category 'Output' -Level Warning -Path $LogPath -Message ("Skipping CSV history append. QueryStatus is '{0}', not 'Parsed'." -f $Result.QueryStatus)
+        return
+    }
+
+    try {
+        $directory = Split-Path -Path $Path -Parent
+        if (-not [string]::IsNullOrWhiteSpace($directory) -and -not (Test-Path -LiteralPath $directory)) {
+            New-Item -Path $directory -ItemType Directory -Force | Out-Null
+        }
+
+        $row = [pscustomobject]@{
+            RunDateTime           = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+            DiaryDate             = $Result.DiaryDate
+            CaloriesConsumed      = $Result.CaloriesConsumed
+            CalorieGoal           = $Result.CalorieGoal
+            ProteinGrams          = $Result.ProteinGrams
+            ProteinGoalGrams      = $Result.ProteinGoalGrams
+            CarbsGrams            = $Result.CarbsGrams
+            NetCarbsGrams         = $Result.NetCarbsGrams
+            CarbohydrateGoalGrams = $Result.CarbohydrateGoalGrams
+            FatGrams              = $Result.FatGrams
+            FatGoalGrams          = $Result.FatGoalGrams
+            FiberGrams            = $Result.FiberGrams
+            SugarsGrams           = $Result.SugarsGrams
+            AddedSugarsGrams      = $Result.AddedSugarsGrams
+            SaturatedFatGrams     = $Result.SaturatedFatGrams
+            TransFatGrams         = $Result.TransFatGrams
+            CholesterolMg         = $Result.CholesterolMg
+            SodiumMg              = $Result.SodiumMg
+            PotassiumMg           = $Result.PotassiumMg
+            WaterG                = $Result.WaterG
+            CalciumMg             = $Result.CalciumMg
+            IronMg                = $Result.IronMg
+            MagnesiumMg           = $Result.MagnesiumMg
+            PhosphorusMg          = $Result.PhosphorusMg
+            ZincMg                = $Result.ZincMg
+            CopperMg              = $Result.CopperMg
+            ManganeseMg           = $Result.ManganeseMg
+            SeleniumUg            = $Result.SeleniumUg
+            VitaminA_ug           = $Result.VitaminA_ug
+            VitaminC_mg           = $Result.VitaminC_mg
+            VitaminD_IU           = $Result.VitaminD_IU
+            VitaminE_mg           = $Result.VitaminE_mg
+            VitaminK_ug           = $Result.VitaminK_ug
+            B1_Thiamine_mg        = $Result.B1_Thiamine_mg
+            B2_Riboflavin_mg      = $Result.B2_Riboflavin_mg
+            B3_Niacin_mg          = $Result.B3_Niacin_mg
+            B5_PantothenicAcid_mg = $Result.B5_PantothenicAcid_mg
+            B6_Pyridoxine_mg      = $Result.B6_Pyridoxine_mg
+            B12_Cobalamin_ug      = $Result.B12_Cobalamin_ug
+            Folate_ug             = $Result.Folate_ug
+            QueryStatus           = $Result.QueryStatus
+            ValidationStatus      = $Result.ValidationStatus
+        }
+
+        $row | Export-Csv -LiteralPath $Path -Append -NoTypeInformation -Encoding UTF8
+        Write-StageLog -Stage 'Persist' -Category 'Output' -Path $LogPath -Message ("Appended history row to '{0}'." -f $Path)
+    }
+    catch {
+        Write-StageLog -Stage 'Persist' -Category 'Output' -Level Warning -Path $LogPath -Message ("Failed to append history row to '{0}'. {1}" -f $Path, $_.Exception.Message)
+    }
+}
+
 function Start-CronometerMonitor {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -981,6 +1377,9 @@ function Start-CronometerMonitor {
 
         [Parameter(Mandatory)]
         [string]$ResultJsonPath,
+
+        [Parameter(Mandatory)]
+        [string]$HistoryCsvPath,
 
         [Parameter(Mandatory)]
         [bool]$ForceRawDump,
@@ -1029,6 +1428,7 @@ function Start-CronometerMonitor {
         -LogPath               $LogPath
 
     Save-ResultJson -Result $result -Path $ResultJsonPath -LogPath $LogPath
+    Save-HistoryCsv -Result $result -Path $HistoryCsvPath -LogPath $LogPath
 
     Write-StageLog -Stage 'Complete' -Category 'Lifecycle' -Path $LogPath -Level $(if ($result.RequiredFieldsPresent) { 'Info' } else { 'Warning' }) -Message ("Monitor run complete. Status: {0}. Validation: {1}. Attempts: {2}. Date: {3}. Calories: {4:F0}/{5}. Protein: {6:F1}g/{7}g." -f `
         $result.QueryStatus, $result.ValidationStatus, $result.ExtractionAttemptsUsed, $result.DiaryDate, $result.CaloriesConsumed, $result.CalorieGoal, `
@@ -1051,6 +1451,7 @@ if ($MyInvocation.InvocationName -ne '.') {
             -LogPath               $LogPath `
             -RawResponsePath       $RawResponsePath `
             -ResultJsonPath        $ResultJsonPath `
+            -HistoryCsvPath        $HistoryCsvPath `
             -ForceRawDump          $ForceRawDump.IsPresent `
             -CalorieGoal           $CalorieGoal `
             -ProteinGoalGrams      $ProteinGoalGrams `

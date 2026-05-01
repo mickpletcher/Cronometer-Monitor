@@ -1,0 +1,403 @@
+{
+  "nutritionSchema": {
+    "version": "1.0",
+    "description": "FDA Daily Values with bariatric overrides for analysis and recommendations",
+
+    "nutrients": {
+      "calories": {
+        "unit": "kcal",
+        "fda": {
+          "reference": 2000
+        },
+        "bariatric": {
+          "range": [1800, 2200]
+        }
+      },
+
+      "protein": {
+        "unit": "g",
+        "fda": {
+          "dailyValue": 50
+        },
+        "bariatric": {
+          "min": 60,
+          "optimal": 90
+        },
+        "rules": {
+          "priority": "bariatric",
+          "deficientBelow": 60
+        }
+      },
+
+      "carbohydrates": {
+        "unit": "g",
+        "fda": {
+          "dailyValue": 275
+        },
+        "bariatric": {
+          "note": "Individualized"
+        }
+      },
+
+      "fiber": {
+        "unit": "g",
+        "fda": {
+          "dailyValue": 28
+        }
+      },
+
+      "fat": {
+        "unit": "g",
+        "fda": {
+          "dailyValue": 78
+        }
+      },
+
+      "omega3": {
+        "unit": "g",
+        "fda": {
+          "note": "No established adult Daily Value for total omega-3. Adult adequacy is typically assessed through ALA intake."
+        },
+        "bariatric": {
+          "note": "No standalone bariatric total omega-3 target is defined in the current schema."
+        },
+        "rules": {
+          "informational": true
+        }
+      },
+
+      "ala": {
+        "unit": "g",
+        "fda": {
+          "dailyValue": 1.6
+        },
+        "bariatric": {
+          "target": 1.6
+        }
+      },
+
+      "dha": {
+        "unit": "g",
+        "fda": {
+          "note": "No established recommended intake for DHA alone."
+        },
+        "bariatric": {
+          "note": "No standalone bariatric DHA target is defined in the current schema."
+        },
+        "rules": {
+          "informational": true
+        }
+      },
+
+      "epa": {
+        "unit": "g",
+        "fda": {
+          "note": "No established recommended intake for EPA alone."
+        },
+        "bariatric": {
+          "note": "No standalone bariatric EPA target is defined in the current schema."
+        },
+        "rules": {
+          "informational": true
+        }
+      },
+
+      "omega6": {
+        "unit": "g",
+        "fda": {
+          "note": "No established adult Daily Value for total omega-6. Adult adequacy is typically assessed through linoleic acid intake."
+        },
+        "bariatric": {
+          "note": "No standalone bariatric total omega-6 target is defined in the current schema."
+        },
+        "rules": {
+          "informational": true
+        }
+      },
+
+      "la": {
+        "unit": "g",
+        "fda": {
+          "dailyValue": 17
+        },
+        "bariatric": {
+          "target": 17
+        }
+      },
+
+      "saturatedFat": {
+        "unit": "g",
+        "fda": {
+          "max": 20
+        },
+        "rules": {
+          "limit": true
+        }
+      },
+
+      "transFat": {
+        "unit": "g",
+        "fda": {
+          "note": "Minimize"
+        }
+      },
+
+      "cholesterol": {
+        "unit": "mg",
+        "fda": {
+          "max": 300
+        }
+      },
+
+      "sodium": {
+        "unit": "mg",
+        "fda": {
+          "max": 2300
+        },
+        "rules": {
+          "limit": true
+        }
+      },
+
+      "potassium": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 4700
+        },
+        "bariatric": {
+          "target": 4700
+        }
+      },
+
+      "magnesium": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 420
+        },
+        "bariatric": {
+          "target": 420
+        }
+      },
+
+      "phosphorus": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 1250
+        },
+        "bariatric": {
+          "target": 1250
+        }
+      },
+
+      "manganese": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 2.3
+        },
+        "bariatric": {
+          "target": 2.3
+        }
+      },
+
+      "selenium": {
+        "unit": "mcg",
+        "fda": {
+          "dailyValue": 55
+        },
+        "bariatric": {
+          "target": 55
+        }
+      },
+
+      "addedSugars": {
+        "unit": "g",
+        "fda": {
+          "max": 50
+        },
+        "rules": {
+          "limit": true
+        }
+      },
+
+      "vitaminA": {
+        "unit": "mcg",
+        "fda": {
+          "dailyValue": 900
+        },
+        "bariatric": {
+          "range": [1500, 3000]
+        }
+      },
+
+      "vitaminC": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 90
+        },
+        "bariatric": {
+          "target": 90
+        }
+      },
+
+      "vitaminD": {
+        "unit": "mcg",
+        "fda": {
+          "dailyValue": 20
+        },
+        "bariatric": {
+          "target": 75
+        }
+      },
+
+      "vitaminB12": {
+        "unit": "mcg",
+        "fda": {
+          "dailyValue": 2.4
+        },
+        "bariatric": {
+          "range": [350, 1000]
+        }
+      },
+
+      "iron": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 18
+        },
+        "bariatric": {
+          "range": [45, 60]
+        },
+        "rules": {
+          "priority": "bariatric"
+        }
+      },
+
+      "calcium": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 1300
+        },
+        "bariatric": {
+          "range": [1200, 1500],
+          "type": "calcium citrate"
+        }
+      },
+
+      "thiaminB1": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 1.2
+        },
+        "bariatric": {
+          "min": 12
+        }
+      },
+
+      "riboflavinB2": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 1.3
+        },
+        "bariatric": {
+          "target": 1.3
+        }
+      },
+
+      "niacinB3": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 16
+        },
+        "bariatric": {
+          "target": 16
+        }
+      },
+
+      "pantothenicAcidB5": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 5
+        },
+        "bariatric": {
+          "target": 5
+        }
+      },
+
+      "pyridoxineB6": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 1.7
+        },
+        "bariatric": {
+          "target": 1.7
+        }
+      },
+
+      "folate": {
+        "unit": "mcg",
+        "fda": {
+          "dailyValue": 400
+        },
+        "bariatric": {
+          "range": [400, 800]
+        }
+      },
+
+      "zinc": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 11
+        },
+        "bariatric": {
+          "range": [8, 22]
+        }
+      },
+
+      "copper": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 0.9
+        },
+        "bariatric": {
+          "range": [1, 2]
+        }
+      },
+
+      "vitaminE": {
+        "unit": "mg",
+        "fda": {
+          "dailyValue": 15
+        },
+        "bariatric": {
+          "target": 15
+        }
+      },
+
+      "vitaminK": {
+        "unit": "mcg",
+        "fda": {
+          "dailyValue": 120
+        },
+        "bariatric": {
+          "target": 120
+        }
+      }
+    },
+
+    "evaluationLogic": {
+      "deficiency": "value < bariatric.min OR value < fda.dailyValue",
+      "optimal": "within bariatric.optimal OR bariatric.range",
+      "excess": "value > fda.max"
+    },
+
+    "recommendationEngine": {
+      "enabled": true,
+      "strategy": "deficit-based",
+      "output": [
+        "nutrient_deficiency",
+        "recommended_foods",
+        "priority_level"
+      ]
+    }
+  }
+}

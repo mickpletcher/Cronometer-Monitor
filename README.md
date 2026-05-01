@@ -137,6 +137,97 @@ Run the extractor first so the result JSON exists, then start the local web dash
 
 This opens `http://localhost:8876/dashboard/` and loads `logs\CronometerMonitorResult.json` by default. You can also load any other JSON file from disk, including a richer payload written later by n8n.
 
+### Run the local API
+
+Start the API wrapper:
+
+```powershell
+.\Start-CronometerApi.ps1
+```
+
+Endpoints:
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/health` | `GET` | Service status, cache state, and result file status |
+| `/api/latest` | `GET` | Latest nutrition payload using in memory cache, recent result file cache, or a fresh extractor run |
+| `/api/analysis` | `GET` | Latest nutrition payload plus deterministic scoring from the nutrition target schema |
+| `/api/refresh` | `POST` | Force a new browser extraction and refresh the cache |
+
+The API listens on `http://localhost:8878/` by default. Cache TTL defaults to 60 seconds.
+
+Example calls:
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:8878/health'
+Invoke-RestMethod -Uri 'http://localhost:8878/api/latest'
+Invoke-RestMethod -Uri 'http://localhost:8878/api/analysis'
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8878/api/refresh'
+```
+
+Fresh extractions served through the API are also written into `logs\CronometerHistory.sqlite` by default so API-driven workflows build daily history automatically.
+
+If you bind beyond localhost, supply an API key:
+
+```powershell
+Set-Content -LiteralPath .\logs\CronometerApi.key -Value 'replace-with-a-secret'
+.\Start-CronometerApi.ps1 -BindAddress * -RequireApiKey
+Invoke-RestMethod -Uri 'http://127.0.0.1:8878/api/latest' -Headers @{ 'X-API-Key' = 'replace-with-a-secret' }
+```
+
+### Use the CLI wrapper
+
+The CLI wrapper exposes the common workflows behind one script instead of calling the extractor and API scripts directly.
+
+```powershell
+.\Invoke-CronometerCli.ps1 fetch
+.\Invoke-CronometerCli.ps1 history -Limit 7 -Descending
+.\Invoke-CronometerCli.ps1 export -Format Csv
+.\Invoke-CronometerCli.ps1 analyze
+.\Invoke-CronometerCli.ps1 serve
+```
+
+Commands:
+
+| Command | Purpose |
+| --- | --- |
+| `fetch` | Run a fresh extraction, save the normal JSON output, and persist a successful daily snapshot into SQLite |
+| `history` | Query stored daily snapshots from SQLite with optional date filters |
+| `export` | Export history rows to JSON or CSV |
+| `analyze` | Evaluate the latest result against the nutrition target schema and return deterministic scoring |
+| `serve` | Start the local API wrapper with the same history store attached |
+
+Examples:
+
+```powershell
+.\Invoke-CronometerCli.ps1 fetch -LaunchChrome
+.\Invoke-CronometerCli.ps1 history -FromDate '2026-04-01' -ToDate '2026-04-30' -Descending
+.\Invoke-CronometerCli.ps1 export -Format Json -IncludePayload -OutputPath .\logs\exports\april-history.json
+.\Invoke-CronometerCli.ps1 analyze
+.\Invoke-CronometerCli.ps1 serve -Port 8878
+```
+
+SQLite history uses Python 3 and the standard library `sqlite3` module under the hood. The public workflow stays in PowerShell.
+
+### Nutrition target analysis
+
+The repo can evaluate extracted intake against [nutrition-targets.schema.json](nutrition-targets.schema.json). This schema includes FDA values plus bariatric specific overrides and is the canonical target source for downstream scoring.
+
+```powershell
+.\Invoke-CronometerCli.ps1 analyze
+```
+
+The analysis output includes:
+
+| Section | Purpose |
+| --- | --- |
+| `Summary` | Count of deficient, excess, optimal, and missing nutrients |
+| `PriorityDeficiencies` | Top nutrients below target |
+| `LimitAlerts` | Nutrients above a defined max |
+| `Nutrients` | Full per nutrient scoring details with targets, percent complete, deficit, or excess |
+
+This is the payload that should be handed to an LLM. The math and comparisons stay deterministic in code.
+
 ---
 
 ## Parameters
@@ -225,12 +316,20 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 | `B12_Cobalamin_ug` | double | Vitamin B12 in micrograms |
 | `Folate_ug` | double | Folate in micrograms |
 
+### Biometrics and diary
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `Biometrics` | object[] | Biometric rows from the diary such as heart rate, weight, and blood pressure |
+| `DiaryGroups` | object[] | Meal and supplement sections with summary totals and nested entries |
+| `DiaryEntries` | object[] | Flat list of all meal, food, and supplement rows extracted from the diary |
+| `Nutrients` | object[] | Every nutrient on the page as `{ Name, Value, Unit }` |
+| `Alerts` | string[] | One entry per macro that is below its daily goal |
+
 ### Meta
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `Nutrients` | object[] | Every nutrient on the page as `{ Name, Value, Unit }` |
-| `Alerts` | string[] | One entry per macro that is below its daily goal |
 | `SchemaVersion` | string | Current output schema version |
 | `QueryStatus` | string | `Parsed` when validation passed, `ValidationFailed` when required fields were missing or invalid |
 | `ValidationStatus` | string | Validation result for the required field check |
@@ -244,13 +343,59 @@ The script returns a `PSCustomObject`. The diary date reflects what is displayed
 | `NutrientNameSelectorUsed` | string | Selector that matched nutrient labels |
 | `NutrientValueSelectorUsed` | string | Selector that matched nutrient values |
 | `NutrientUnitSelectorUsed` | string | Selector that matched nutrient units |
+| `DiaryGroupSelectorUsed` | string | Selector that matched meal and supplement group header rows |
+| `DiaryTimeSelectorUsed` | string | Selector that matched timestamp cells in diary rows |
 | `MissingSignalsSummary` | string | Friendly summary of extraction warnings. `None` when no extraction signals were missing |
-| `OutputMetadata` | object | Selector matches, selector summary text, nutrient count, table count, and missing extraction signals |
+| `OutputMetadata` | object | Selector matches, selector summary text, nutrient count, biometric count, diary counts, table count, and missing extraction signals |
+
+### Biometrics object shape
+
+Each item in `Biometrics` includes:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `Time` | string | Time shown in the diary row |
+| `Name` | string | Base metric name such as `Heart Rate` or `Blood Pressure` |
+| `Source` | string | Source inside parentheses such as `Withings` or `Apple Health` |
+| `DisplayName` | string | Full label from the page |
+| `Subtitle` | string | Optional subtitle text such as average and peak values |
+| `Value` | string | Raw displayed value |
+| `NumericValue` | double | Parsed numeric value when the metric is a single number |
+| `Unit` | string | Display unit such as `bpm`, `lbs`, or `mmHg` |
+| `Systolic` | double | Parsed systolic value for blood pressure rows |
+| `Diastolic` | double | Parsed diastolic value for blood pressure rows |
+
+### Diary group object shape
+
+Each item in `DiaryGroups` includes:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `GroupName` | string | Section name such as `Breakfast`, `Lunch`, `Snacks`, or `Supplements/Vitamins` |
+| `SummaryText` | string | Raw macro summary text from the group header |
+| `Summary` | object | Parsed calories, protein, carbs, and fat totals when present |
+| `Entries` | object[] | Rows that belong to the group |
+
+### Diary entry object shape
+
+Each item in `DiaryEntries` and each nested `DiaryGroups[].Entries` item includes:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `GroupName` | string | Parent group title |
+| `EntryType` | string | `Food`, `Supplement`, or `Unknown` |
+| `Time` | string | Time shown in the diary row |
+| `Name` | string | Food or supplement name |
+| `Quantity` | string | Display quantity |
+| `Serving` | string | Serving text |
+| `Calories` | double | Parsed calorie value when present |
+| `CaloriesText` | string | Raw calorie text from the row |
+| `CaloriesUnit` | string | Display unit, usually `kcal` |
 
 ### Example output
 
 ```text
-SchemaVersion          : 2.0
+SchemaVersion          : 2.1
 DiaryDate               : Apr 28
 CaloriesConsumed        : 1625.3
 CaloriesRemaining       : 574.7
@@ -280,6 +425,9 @@ MagnesiumMg             : 565.0
 VitaminC_mg             : 315.0
 VitaminD_IU             : 4235.7
 B12_Cobalamin_ug        : 1.8
+Biometrics              : { 6 entries }
+DiaryGroups             : { 5 entries }
+DiaryEntries            : { 14 entries }
 Nutrients               : { 38 entries }
 Alerts                  : { Calories below goal: 1625 kcal consumed / 2200 kcal goal (575 kcal remaining) }
 QueryStatus             : Parsed
@@ -294,8 +442,10 @@ TablesSelectorUsed      : table.targets-table
 NutrientNameSelectorUsed : .nutrient-name
 NutrientValueSelectorUsed : .targets-table-number .gwt-HTML
 NutrientUnitSelectorUsed : td:nth-child(3) .gwt-Label
+DiaryGroupSelectorUsed   : tr.diary-group-row
+DiaryTimeSelectorUsed    : td.diary-time
 MissingSignalsSummary   : None
-OutputMetadata          : @{SchemaVersion=2.0; SelectorMatchesSummary=Date=.diary-date-btn; Tables=table.targets-table; Name=.nutrient-name; Value=.targets-table-number .gwt-HTML; Unit=td:nth-child(3) .gwt-Label; SelectorMatches=...; TableCount=2; NutrientCount=38; MissingSignalsSummary=None; MissingSignals=System.Object[]}
+OutputMetadata          : @{SchemaVersion=2.1; SelectorMatchesSummary=Date=.diary-date-btn; Tables=table.targets-table; Name=.nutrient-name; Value=.targets-table-number .gwt-HTML; Unit=td:nth-child(3) .gwt-Label; DiaryGroup=tr.diary-group-row; DiaryTime=td.diary-time; SelectorMatches=...; TableCount=2; NutrientCount=38; BiometricCount=6; DiaryGroupCount=5; DiaryEntryCount=14; MissingSignalsSummary=None; MissingSignals=System.Object[]}
 ```
 
 ---
@@ -306,11 +456,63 @@ All activity is written to a CMTrace-compatible log file at `.\logs\CronometerMo
 
 The script now writes stage and category markers into the message body so you can tell whether a message came from browser discovery, DOM extraction, validation, parsing, retry wait, or run completion.
 
-The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients, metadata }` object extracted from the page and is useful for verifying what the script read from the browser.
+The raw DOM response is saved to `.\logs\CronometerDiaryRawResponse.json` on first run or whenever `-ForceRawDump` is used. This file contains the full `{ date, nutrients, biometrics, diaryGroups, diaryEntries, metadata }` object extracted from the page and is useful for verifying what the script read from the browser.
 
 For normal console use, the script also promotes the matched selector values and summary fields to top-level properties so you do not need to expand `OutputMetadata` just to see what happened.
 
 On every run, the final structured output object is also written to `.\logs\CronometerMonitorResult.json`. This is the file intended for downstream tools such as n8n.
+
+Successful daily snapshots can also be stored in `.\logs\CronometerHistory.sqlite`. The CLI `fetch` command and fresh API extractions both write to this database.
+
+## History Storage
+
+SQLite snapshot storage keeps one current row per diary day using the displayed Cronometer date as the daily key. Each row stores summary macro fields plus the full structured payload JSON.
+
+Default database path:
+
+```text
+.\logs\CronometerHistory.sqlite
+```
+
+Stored fields include:
+
+| Field | Description |
+| --- | --- |
+| `snapshot_key` | Daily key derived from the displayed diary date |
+| `snapshot_date_text` | Raw diary date text from Cronometer |
+| `snapshot_date_iso` | Best effort normalized date in `yyyy-MM-dd` when parsing succeeds |
+| `captured_at_utc` | Last successful write time for that diary day |
+| `schema_version` | Output schema version |
+| `query_status` | Parsed or failure status |
+| `calories_consumed` | Daily calorie total |
+| `protein_grams` | Daily protein total |
+| `carbs_grams` | Daily carbohydrate total |
+| `fat_grams` | Daily fat total |
+| `payload_json` | Full structured JSON payload |
+
+## Target Schema
+
+[nutrition-targets.schema.json](nutrition-targets.schema.json) is the canonical target definition for derived analysis. It currently includes:
+
+- FDA daily values and max values
+- Bariatric specific minimums, ranges, and target values
+- Limit rules for nutrients such as sodium, saturated fat, and added sugars
+- Recommendation metadata for later workflow layers
+
+Current built in mappings cover calories, protein, carbohydrates, fiber, fat, omega 3, ALA, DHA, EPA, omega 6, LA, saturated fat, trans fat, cholesterol, sodium, added sugars, vitamin A, vitamin D, vitamin B12, iron, calcium, thiamin B1, folate, zinc, and copper.
+
+Vitamin D is converted from the extractor output unit of IU into the schema unit of mcg before scoring.
+
+Omega fields that are not promoted to top level extractor properties are read from the flat `Nutrients` list during analysis. ALA and LA have numeric targets. Total omega 3, total omega 6, DHA, and EPA are currently informational because the schema does not define standalone official numeric targets for those fields.
+
+## Integrations
+
+Example integration files are included under [examples](examples/):
+
+| Path | Purpose |
+| --- | --- |
+| `examples\n8n\CronometerApiFlow.json` | n8n workflow that polls `/api/latest` and reshapes the payload |
+| `examples\home-assistant\configuration.yaml` | Home Assistant REST sensor and template sensor example |
 
 ---
 
@@ -321,7 +523,7 @@ Fixture-based regression coverage now exists for the output shaping path.
 Run the current tests with:
 
 ```powershell
-Invoke-Pester -Path .\Tests\Invoke-CronometerMonitor.Output.Tests.ps1 -CI
+Invoke-Pester -Path .\Tests\CronometerApi.Service.Tests.ps1,.\Tests\Invoke-CronometerMonitor.Output.Tests.ps1,.\Tests\CronometerHistory.Service.Tests.ps1,.\Tests\CronometerAnalysis.Service.Tests.ps1 -CI
 ```
 
 The current fixture coverage verifies:
@@ -329,6 +531,10 @@ The current fixture coverage verifies:
 - Empty `missingSignals` data renders as `MissingSignalsSummary = None`
 - Single-item `missingSignals` data does not fail on scalar versus array shape differences
 - Selector display fields are promoted correctly into the top-level output object
+- Biometrics and grouped diary rows are preserved in the final shaped output
+- SQLite history store creation, persistence, and CSV export
+- Schema based nutrient scoring, including bariatric thresholds and vitamin D unit conversion
+- Omega nutrient scoring from the flat `Nutrients` list, including ALA and LA targets
 
 ---
 
@@ -345,18 +551,26 @@ The nutrition summary panels must be visible and fully loaded in the browser for
 ```text
 Cronometer-Monitor\
     Invoke-CronometerMonitor.ps1    Main script
+    Invoke-CronometerCli.ps1        CLI wrapper for fetch, history, export, analyze, and serve
     Start-ChromeDebug.ps1           Chrome launcher with remote debugging
+    Start-CronometerApi.ps1         Local API wrapper
+    CronometerApi.Service.ps1       API cache and auth helpers
+    CronometerHistory.Service.ps1   SQLite history helpers
+    CronometerAnalysis.Service.ps1  Deterministic nutrient target analysis
     CHANGELOG.md                    Version history and change log
-    PLAN.md                         Architecture and build plan
-    ANALYSIS.md                     Original project analysis
+    assessment.md                   Current repo briefing for future work
+    nutrition-targets.schema.json   FDA and bariatric target schema
     docs\                           Repo audit and support docs
     specs\                          GitHub Spec packages for non-trivial changes
     Tests\                          Fixture-based regression tests
+    examples\                       Example n8n and Home Assistant integrations
+    tools\                          SQLite helper used by history storage
     README.md                       This file
     logs\
         CronometerMonitor.log               CMTrace-formatted activity log
         CronometerDiaryRawResponse.json     Raw DOM response for inspection
         CronometerMonitorResult.json        Final structured result JSON for downstream tools
+        CronometerHistory.sqlite            Daily snapshot history store
 ```
 
 ---
@@ -384,3 +598,4 @@ The first package is [specs/001-dom-extraction-hardening](specs/001-dom-extracti
 ## License
 
 MIT
+

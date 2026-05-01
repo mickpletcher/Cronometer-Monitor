@@ -1,0 +1,86 @@
+{
+  "name": "Cronometer Latest Diary Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8878/api/latest",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http-request",
+      "name": "Get Latest Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\nconst data = body.Data || {};\nconst alerts = Array.isArray(data.Alerts) ? data.Alerts : [];\nreturn [{\n  json: {\n    diaryDate: data.DiaryDate,\n    caloriesConsumed: data.CaloriesConsumed,\n    caloriesRemaining: data.CaloriesRemaining,\n    proteinGrams: data.ProteinGrams,\n    carbsGrams: data.CarbsGrams,\n    fatGrams: data.FatGrams,\n    biometrics: data.Biometrics || [],\n    diaryGroups: data.DiaryGroups || [],\n    diaryEntries: data.DiaryEntries || [],\n    alerts,\n    source: body.Source,\n    schemaVersion: data.SchemaVersion\n  }\n}];"
+      },
+      "id": "shape-data",
+      "name": "Shape Nutrition Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Shape Nutrition Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

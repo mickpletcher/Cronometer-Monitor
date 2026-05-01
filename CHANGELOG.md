@@ -20,6 +20,7 @@ Format: `[version] - YYYY-MM-DD` followed by change categories. Versions follow 
 - `OutputMetadata` now includes `SelectorMatchesSummary` and `MissingSignalsSummary` for cleaner default `Format-List` output.
 - `Tests\Invoke-CronometerMonitor.Output.Tests.ps1` plus fixture files for output shaping regression coverage.
 - `ResultJsonPath` parameter and `logs\CronometerMonitorResult.json` output for downstream tools such as n8n.
+- `HistoryCsvPath` parameter and `Save-HistoryCsv` function. On every run that produces a valid extraction (`QueryStatus = Parsed`), a single row is appended to `logs\CronometerHistory.csv` with a `RunDateTime` timestamp and all macro, mineral, and vitamin fields. The CSV is created on first run with headers and appended on all subsequent runs.
 
 ### Changed
 

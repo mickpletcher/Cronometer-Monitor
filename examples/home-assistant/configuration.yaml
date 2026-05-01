@@ -1,0 +1,31 @@
+rest:
+  - resource: http://127.0.0.1:8878/api/latest
+    method: GET
+    scan_interval: 300
+    sensor:
+      - name: Cronometer Snapshot
+        unique_id: cronometer_snapshot
+        value_template: "{{ value_json.Data.DiaryDate }}"
+        json_attributes:
+          - Source
+          - Cache
+          - Data
+
+template:
+  - sensor:
+      - name: Cronometer Calories Consumed
+        unique_id: cronometer_calories_consumed
+        unit_of_measurement: "kcal"
+        state: "{{ state_attr('sensor.cronometer_snapshot', 'Data').CaloriesConsumed }}"
+      - name: Cronometer Protein
+        unique_id: cronometer_protein
+        unit_of_measurement: "g"
+        state: "{{ state_attr('sensor.cronometer_snapshot', 'Data').ProteinGrams }}"
+      - name: Cronometer Carbs
+        unique_id: cronometer_carbs
+        unit_of_measurement: "g"
+        state: "{{ state_attr('sensor.cronometer_snapshot', 'Data').CarbsGrams }}"
+      - name: Cronometer Fat
+        unique_id: cronometer_fat
+        unit_of_measurement: "g"
+        state: "{{ state_attr('sensor.cronometer_snapshot', 'Data').FatGrams }}"

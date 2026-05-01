@@ -1,58 +1,141 @@
+<#
+.SYNOPSIS
+Serves the Cronometer dashboard as a local HTTP server.
+
+.DESCRIPTION
+Starts an HTTP listener rooted at the script directory. The dashboard files
+are served from the dashboard\ subfolder and the result JSON is served from
+the logs\ subfolder. Opens the dashboard in the default browser automatically.
+
+Serves until Ctrl+C is pressed.
+
+.PARAMETER Port
+TCP port to listen on. Default is 8876.
+
+.PARAMETER NoBrowser
+Skip opening the browser automatically on start.
+
+.EXAMPLE
+.\Start-CronometerDashboard.ps1
+
+.EXAMPLE
+.\Start-CronometerDashboard.ps1 -Port 9000 -NoBrowser
+#>
 [CmdletBinding()]
 param(
-    [int]$Port = 8876
+    [Parameter()]
+    [int]$Port = 8876,
+
+    [Parameter()]
+    [switch]$NoBrowser
 )
 
-$repoRoot = Split-Path -Path $PSCommandPath -Parent
-$listener = [System.Net.HttpListener]::new()
-$listener.Prefixes.Add("http://localhost:$Port/")
-$listener.Start()
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-Write-Host "Dashboard server running at http://localhost:$Port/dashboard/"
-Start-Process "http://localhost:$Port/dashboard/"
+$mimeTypes = @{
+    '.html' = 'text/html; charset=utf-8'
+    '.js'   = 'application/javascript; charset=utf-8'
+    '.css'  = 'text/css; charset=utf-8'
+    '.json' = 'application/json; charset=utf-8'
+    '.ico'  = 'image/x-icon'
+    '.png'  = 'image/png'
+    '.svg'  = 'image/svg+xml'
+}
+
+$resolvedRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
+$prefix       = "http://localhost:$Port/"
+$dashboardUrl = "${prefix}dashboard/"
+
+$listener = [System.Net.HttpListener]::new()
+$listener.Prefixes.Add($prefix)
+
+try {
+    $listener.Start()
+}
+catch {
+    Write-Error ("Failed to start HTTP listener on port {0}. Is another process using that port? {1}" -f $Port, $_.Exception.Message)
+    exit 1
+}
+
+Write-Host ("Dashboard running at {0}" -f $dashboardUrl)
+Write-Host 'Press Ctrl+C to stop.'
+
+if (-not $NoBrowser) {
+    Start-Process $dashboardUrl
+}
 
 try {
     while ($listener.IsListening) {
-        $context = $listener.GetContext()
-        $requestPath = $context.Request.Url.AbsolutePath.TrimStart("/")
-
-        if ([string]::IsNullOrWhiteSpace($requestPath)) {
-            $requestPath = "dashboard/index.html"
+        $context = $null
+        try {
+            $context = $listener.GetContext()
         }
-        elseif ($requestPath.EndsWith("/")) {
-            $requestPath = Join-Path -Path $requestPath -ChildPath "index.html"
+        catch {
+            break
         }
 
-        $resolvedPath = Join-Path -Path $repoRoot -ChildPath $requestPath
+        $response = $context.Response
 
-        if ((Test-Path -LiteralPath $resolvedPath) -and -not (Get-Item -LiteralPath $resolvedPath).PSIsContainer) {
-            $extension = [System.IO.Path]::GetExtension($resolvedPath).ToLowerInvariant()
-            $contentType = switch ($extension) {
-                ".html" { "text/html; charset=utf-8" }
-                ".css" { "text/css; charset=utf-8" }
-                ".js" { "application/javascript; charset=utf-8" }
-                ".json" { "application/json; charset=utf-8" }
-                default { "application/octet-stream" }
+        try {
+            $urlPath = $context.Request.Url.LocalPath.TrimStart('/')
+
+            if ($urlPath -eq '') {
+                $response.StatusCode = 302
+                $response.Headers.Add('Location', $dashboardUrl)
+                $response.Close()
+                continue
             }
 
-            $bytes = [System.IO.File]::ReadAllBytes($resolvedPath)
-            $context.Response.StatusCode = 200
-            $context.Response.ContentType = $contentType
-            $context.Response.ContentLength64 = $bytes.Length
-            $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
-        }
-        else {
-            $notFoundBytes = [System.Text.Encoding]::UTF8.GetBytes("Not found")
-            $context.Response.StatusCode = 404
-            $context.Response.ContentType = "text/plain; charset=utf-8"
-            $context.Response.ContentLength64 = $notFoundBytes.Length
-            $context.Response.OutputStream.Write($notFoundBytes, 0, $notFoundBytes.Length)
-        }
+            $urlPath  = $urlPath -replace '/', [System.IO.Path]::DirectorySeparatorChar
+            $fullPath = [System.IO.Path]::GetFullPath((Join-Path $resolvedRoot $urlPath))
 
-        $context.Response.OutputStream.Close()
+            if (-not $fullPath.StartsWith($resolvedRoot)) {
+                $response.StatusCode = 403
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes('403 Forbidden')
+                $response.ContentType = 'text/plain'
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+                $response.Close()
+                continue
+            }
+
+            if (Test-Path -LiteralPath $fullPath -PathType Container) {
+                $fullPath = Join-Path $fullPath 'index.html'
+            }
+
+            if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
+                $ext   = [System.IO.Path]::GetExtension($fullPath).ToLower()
+                $mime  = if ($mimeTypes.ContainsKey($ext)) { $mimeTypes[$ext] } else { 'application/octet-stream' }
+                $bytes = [System.IO.File]::ReadAllBytes($fullPath)
+
+                $response.StatusCode      = 200
+                $response.ContentType     = $mime
+                $response.ContentLength64 = $bytes.Length
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+            }
+            else {
+                $response.StatusCode = 404
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes('404 Not Found')
+                $response.ContentType = 'text/plain'
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+            }
+        }
+        catch {
+            try {
+                $response.StatusCode = 500
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes("500 Internal Server Error: $($_.Exception.Message)")
+                $response.ContentType = 'text/plain'
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+            }
+            catch {}
+        }
+        finally {
+            try { $response.Close() } catch {}
+        }
     }
 }
 finally {
-    $listener.Stop()
+    if ($listener.IsListening) { $listener.Stop() }
     $listener.Close()
+    Write-Host 'Dashboard server stopped.'
 }
