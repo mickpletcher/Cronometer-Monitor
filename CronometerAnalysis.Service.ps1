@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Resolve-CronometerNutritionTargets {
+function Resolve-CronometerNutritionTargetSchema {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -400,7 +400,7 @@ function Get-CronometerDerivedAnalysis {
         [string]$SchemaPath
     )
 
-    $schema = Resolve-CronometerNutritionTargets -SchemaPath $SchemaPath
+    $schema = Resolve-CronometerNutritionTargetSchema -SchemaPath $SchemaPath
     $fieldMap = Get-CronometerAnalysisFieldMap
     $items = @()
 

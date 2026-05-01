@@ -88,7 +88,7 @@ function Test-CronometerApiKeyRequirement {
 }
 
 function New-CronometerApiState {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]
         [int]$CacheTtlSeconds,
@@ -99,6 +99,10 @@ function New-CronometerApiState {
         [Parameter()]
         [string]$SnapshotDatabasePath
     )
+
+    if (-not $PSCmdlet.ShouldProcess('Cronometer API state', 'Initialize in memory')) {
+        return $null
+    }
 
     return [pscustomobject]@{
         CacheTtlSeconds  = $CacheTtlSeconds
@@ -142,7 +146,7 @@ function Get-CronometerApiCacheEntry {
 }
 
 function Set-CronometerApiCacheEntry {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]
         [object]$State,
@@ -156,6 +160,10 @@ function Set-CronometerApiCacheEntry {
         [Parameter()]
         [datetime]$NowUtc = [datetime]::UtcNow
     )
+
+    if (-not $PSCmdlet.ShouldProcess('Cronometer API cache entry', 'Update in memory')) {
+        return $null
+    }
 
     $State.CachedResult = $Data
     $State.CachedAtUtc = $NowUtc

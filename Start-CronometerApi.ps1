@@ -138,7 +138,7 @@ $listener.Prefixes.Add("http://$BindAddress`:$Port/")
 $listener.Start()
 
 Write-CronometerApiLog -Path $LogPath -Message ("API listener started on http://{0}:{1}/" -f $BindAddress, $Port)
-Write-Host ("Cronometer API listening at http://{0}:{1}/" -f $BindAddress, $Port)
+Write-Output ("Cronometer API listening at http://{0}:{1}/" -f $BindAddress, $Port)
 
 $extractor = {
     $result = Start-CronometerMonitor `

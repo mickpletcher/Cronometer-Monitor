@@ -58,8 +58,8 @@ catch {
     exit 1
 }
 
-Write-Host ("Dashboard running at {0}" -f $dashboardUrl)
-Write-Host 'Press Ctrl+C to stop.'
+Write-Output ("Dashboard running at {0}" -f $dashboardUrl)
+Write-Output 'Press Ctrl+C to stop.'
 
 if (-not $NoBrowser) {
     Start-Process $dashboardUrl
@@ -127,15 +127,17 @@ try {
                 $response.ContentType = 'text/plain'
                 $response.OutputStream.Write($bytes, 0, $bytes.Length)
             }
-            catch {}
+            catch {
+                Write-Verbose ("Failed to write error response. {0}" -f $_.Exception.Message)
+            }
         }
         finally {
-            try { $response.Close() } catch {}
+            try { $response.Close() } catch { Write-Verbose ("Failed to close dashboard response. {0}" -f $_.Exception.Message) }
         }
     }
 }
 finally {
     if ($listener.IsListening) { $listener.Stop() }
     $listener.Close()
-    Write-Host 'Dashboard server stopped.'
+    Write-Output 'Dashboard server stopped.'
 }

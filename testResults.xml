@@ -1,20 +1,55 @@
 ﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
-<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="7" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-04-30" time="23:59:18">
-  <environment os-version="10.0.26200" user-domain="DESKTOP-8A1RSPV" platform="Microsoft Windows 11 Pro|C:\Windows|\Device\Harddisk0\Partition3" machine-name="DESKTOP-8A1RSPV" cwd="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor" nunit-version="2.5.8.0" user="mick0" clr-version="10.0.6" />
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="18" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-05-01" time="00:21:53">
+  <environment platform="Microsoft Windows 11 Pro|C:\Windows|\Device\Harddisk0\Partition3" machine-name="DESKTOP-8A1RSPV" cwd="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor" nunit-version="2.5.8.0" clr-version="10.0.6" os-version="10.0.26200" user="mick0" user-domain="DESKTOP-8A1RSPV" />
   <culture-info current-culture="en-US" current-uiculture="en-US" />
-  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="2.4077" asserts="0" description="Pester">
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="9.2292" asserts="0" description="Pester">
     <results>
-      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerAnalysis.Service.Tests.ps1" executed="True" result="Success" success="True" time="2.4077" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerAnalysis.Service.Tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerAnalysis.Service.Tests.ps1" executed="True" result="Success" success="True" time="2.7615" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerAnalysis.Service.Tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Cronometer analysis service helpers" executed="True" result="Success" success="True" time="1.3046" asserts="0" description="Cronometer analysis service helpers">
+          <test-suite type="TestFixture" name="Cronometer analysis service helpers" executed="True" result="Success" success="True" time="1.6011" asserts="0" description="Cronometer analysis service helpers">
             <results>
-              <test-case description="loads the nutrition target schema" name="Cronometer analysis service helpers.loads the nutrition target schema" time="0.2644" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="converts vitamin D from IU to mcg during analysis" name="Cronometer analysis service helpers.converts vitamin D from IU to mcg during analysis" time="0.2721" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="tracks bariatric minimum and optimal protein as separate bands" name="Cronometer analysis service helpers.tracks bariatric minimum and optimal protein as separate bands" time="0.1349" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="marks bariatric minimum and limit nutrients correctly" name="Cronometer analysis service helpers.marks bariatric minimum and limit nutrients correctly" time="0.0834" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="maps omega values from the flat Nutrients list and scores ALA and LA" name="Cronometer analysis service helpers.maps omega values from the flat Nutrients list and scores ALA and LA" time="0.102" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="maps additional vitamin and B complex fields from top level extractor values" name="Cronometer analysis service helpers.maps additional vitamin and B complex fields from top level extractor values" time="0.1232" asserts="0" success="True" result="Success" executed="True" />
-              <test-case description="maps phosphorus manganese and selenium from top level extractor values" name="Cronometer analysis service helpers.maps phosphorus manganese and selenium from top level extractor values" time="0.1728" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="loads the nutrition target schema" name="Cronometer analysis service helpers.loads the nutrition target schema" time="0.3728" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="converts vitamin D from IU to mcg during analysis" name="Cronometer analysis service helpers.converts vitamin D from IU to mcg during analysis" time="0.3698" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="tracks bariatric minimum and optimal protein as separate bands" name="Cronometer analysis service helpers.tracks bariatric minimum and optimal protein as separate bands" time="0.0975" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="marks bariatric minimum and limit nutrients correctly" name="Cronometer analysis service helpers.marks bariatric minimum and limit nutrients correctly" time="0.0976" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="maps omega values from the flat Nutrients list and scores ALA and LA" name="Cronometer analysis service helpers.maps omega values from the flat Nutrients list and scores ALA and LA" time="0.1513" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="maps additional vitamin and B complex fields from top level extractor values" name="Cronometer analysis service helpers.maps additional vitamin and B complex fields from top level extractor values" time="0.1931" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="maps phosphorus manganese and selenium from top level extractor values" name="Cronometer analysis service helpers.maps phosphorus manganese and selenium from top level extractor values" time="0.1558" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerApi.Service.Tests.ps1" executed="True" result="Success" success="True" time="0.4893" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerApi.Service.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Cronometer API service helpers" executed="True" result="Success" success="True" time="0.2857" asserts="0" description="Cronometer API service helpers">
+            <results>
+              <test-case description="requires an API key when binding beyond localhost" name="Cronometer API service helpers.requires an API key when binding beyond localhost" time="0.0256" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="returns cache entries while they are fresh" name="Cronometer API service helpers.returns cache entries while they are fresh" time="0.0955" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="expires cache entries after the TTL" name="Cronometer API service helpers.expires cache entries after the TTL" time="0.019" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="loads a fresh result file into cache" name="Cronometer API service helpers.loads a fresh result file into cache" time="0.0409" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerHistory.Service.Tests.ps1" executed="True" result="Success" success="True" time="5.1948" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\CronometerHistory.Service.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Cronometer history service helpers" executed="True" result="Success" success="True" time="5.0236" asserts="0" description="Cronometer history service helpers">
+            <results>
+              <test-case description="creates the SQLite store file on initialization" name="Cronometer history service helpers.creates the SQLite store file on initialization" time="0.7162" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="saves successful parsed results as daily snapshots" name="Cronometer history service helpers.saves successful parsed results as daily snapshots" time="2.0467" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="skips unsuccessful results" name="Cronometer history service helpers.skips unsuccessful results" time="0.8153" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="exports history rows as CSV" name="Cronometer history service helpers.exports history rows as CSV" time="1.3915" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\Invoke-CronometerMonitor.Output.Tests.ps1" executed="True" result="Success" success="True" time="0.7836" asserts="0" description="C:\Users\mick0\OneDrive\Documents\Code &amp; Dev\GitHub\Cronometer-Monitor\Tests\Invoke-CronometerMonitor.Output.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="ConvertFrom-NutritionResponse output shaping" executed="True" result="Success" success="True" time="0.6638" asserts="0" description="ConvertFrom-NutritionResponse output shaping">
+            <results>
+              <test-case description="renders empty missing signals as None and preserves selector fields" name="ConvertFrom-NutritionResponse output shaping.renders empty missing signals as None and preserves selector fields" time="0.2656" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="handles a single missing signal entry without scalar Count failures" name="ConvertFrom-NutritionResponse output shaping.handles a single missing signal entry without scalar Count failures" time="0.0611" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="surfaces biometrics and grouped diary entries in the shaped output" name="ConvertFrom-NutritionResponse output shaping.surfaces biometrics and grouped diary entries in the shaped output" time="0.1922" asserts="0" success="True" result="Success" executed="True" />
             </results>
           </test-suite>
         </results>

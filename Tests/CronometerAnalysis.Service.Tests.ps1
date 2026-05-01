@@ -6,7 +6,7 @@ Describe 'Cronometer analysis service helpers' {
     }
 
     It 'loads the nutrition target schema' {
-        $schema = Resolve-CronometerNutritionTargets -SchemaPath $schemaPath
+        $schema = Resolve-CronometerNutritionTargetSchema -SchemaPath $schemaPath
 
         $schema.nutritionSchema.version | Should -Be '1.0'
         $schema.nutritionSchema.nutrients.protein.bariatric.min | Should -Be 60
