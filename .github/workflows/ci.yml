@@ -17,16 +17,40 @@ jobs:
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+        continue-on-error: true
+
+      - name: Ensure PSScriptAnalyzer is available
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+
+          $module = Get-Module -ListAvailable -Name PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1
+          if (-not $module) {
+              Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck -Repository PSGallery
+              $module = Get-Module -ListAvailable -Name PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1
+          }
+
+          if (-not $module) {
+              throw 'PSScriptAnalyzer could not be installed or discovered.'
+          }
+
+          Write-Host "Using PSScriptAnalyzer $($module.Version)"
 
       - name: Parse PowerShell scripts
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $files = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.ps1 -File -Recurse
           if (-not $files) {
               throw 'No PowerShell scripts found.'
           }
 
+          Write-Host "Parsing $($files.Count) PowerShell files."
+
           foreach ($file in $files) {
+              Write-Host "Parsing $($file.FullName)"
               $tokens = $null
               $errors = $null
               [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
@@ -40,9 +64,12 @@ jobs:
       - name: Run ScriptAnalyzer
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $files = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.ps1 -File -Recurse
           $results = @()
+          Write-Host "Running ScriptAnalyzer against $($files.Count) PowerShell files."
           foreach ($file in $files) {
+              Write-Host "Analyzing $($file.FullName)"
               $results += Invoke-ScriptAnalyzer -Path $file.FullName -Severity Error, Warning
           }
 
